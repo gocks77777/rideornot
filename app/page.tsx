@@ -13,6 +13,21 @@ import { SearchScreen } from '@/components/search-screen';
 import { haptics } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
 
+// Haversine distance in km
+function getDistanceKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// Taxi fare estimate: base 4800 + 1300/km (Korean mid-size taxi 2025)
+function estimateTaxiFare(distKm: number): number {
+  if (distKm <= 1.6) return 4800;
+  return Math.round(4800 + (distKm - 1.6) * 1300);
+}
+
 export default function Home() {
   const [activeTab, setActiveTab] = useState('home');
   const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false);
@@ -26,26 +41,47 @@ export default function Home() {
       .from('parties')
       .select(`
         *,
-        host:users!parties_host_id_fkey(nickname, avatar_url, manner_score),
-        party_members(user_id, status)
+        host:users!parties_host_id_fkey(nickname, avatar_url, manner_score, bank_account),
+        party_members(user_id, status, user:users(nickname, avatar_url))
       `)
       .order('departure_time', { ascending: true });
 
     if (data) {
-      // Format data to match UI expectations
-      const formatted = data.map(p => ({
-        id: p.id,
-        departure: p.start_point,
-        destination: p.end_point,
-        currentMembers: p.current_member,
-        maxMembers: p.max_member,
-        departureTime: new Date(p.departure_time).toLocaleString('ko-KR', {
-          month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-        }),
-        status: p.status,
-        estimatedCost: 12000, // placeholder
-        participants: p.party_members?.map((m: any) => ({ id: m.user_id, name: '멤버' })) || []
-      }));
+      const formatted = data.map(p => {
+        // Calculate taxi fare from coordinates
+        let fare = 12000;
+        if (p.start_lat && p.start_lng && p.end_lat && p.end_lng) {
+          const dist = getDistanceKm(p.start_lat, p.start_lng, p.end_lat, p.end_lng);
+          // Multiply by 1.3 to approximate road distance vs straight line
+          fare = estimateTaxiFare(dist * 1.3);
+        }
+
+        return {
+          id: p.id,
+          hostId: p.host_id,
+          departure: p.start_point,
+          departureDetail: p.departure_detail || '',
+          destination: p.end_point,
+          startLat: p.start_lat,
+          startLng: p.start_lng,
+          endLat: p.end_lat,
+          endLng: p.end_lng,
+          currentMembers: p.current_member,
+          maxMembers: p.max_member,
+          departureTime: new Date(p.departure_time).toLocaleString('ko-KR', {
+            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+          }),
+          status: p.status,
+          hostName: p.host?.nickname || '방장',
+          hostBankAccount: p.host?.bank_account || '',
+          estimatedCost: fare,
+          participants: p.party_members?.map((m: any) => ({
+            id: m.user_id,
+            name: m.user?.nickname || '멤버',
+            avatar: m.user?.avatar_url || ''
+          })) || []
+        };
+      });
       setAllPods(formatted);
     }
   };
@@ -70,6 +106,9 @@ export default function Home() {
     haptics.light();
     await supabase.auth.signInWithOAuth({
       provider: 'kakao',
+      options: {
+        redirectTo: `${window.location.origin}`,
+      },
     });
   };
 
@@ -85,7 +124,12 @@ export default function Home() {
       .insert({
         host_id: user.id,
         start_point: data.departure,
+        departure_detail: data.departureDetail || null,
+        start_lat: data.departureLat,
+        start_lng: data.departureLng,
         end_point: data.destination,
+        end_lat: data.destinationLat,
+        end_lng: data.destinationLng,
         departure_time: new Date(data.departureTime).toISOString(),
         max_member: data.maxMembers,
         gender_filter: data.genderPreference,
@@ -114,6 +158,7 @@ export default function Home() {
 
   const livePods = allPods.slice(0, 3).map(pod => ({
     id: pod.id,
+    departure: pod.departure,
     destination: pod.destination,
     currentMembers: pod.currentMembers,
     maxMembers: pod.maxMembers,
@@ -252,6 +297,7 @@ export default function Home() {
           activeTab={activeTab}
           onTabChange={setActiveTab}
           onCreatePod={() => setIsCreateSheetOpen(true)}
+          user={user}
         />
 
         <CreatePodSheet
@@ -264,10 +310,45 @@ export default function Home() {
           <PodDetail
             pod={selectedPod}
             onBack={() => setSelectedPodId(null)}
-            onJoin={() => {
-              console.log('Joined pod:', selectedPod.id);
+            onJoin={async () => {
+              if (!user) { alert('로그인이 필요합니다.'); return; }
+              // Atomic join: check current_member < max_member
+              const { data: party } = await supabase
+                .from('parties')
+                .select('current_member, max_member')
+                .eq('id', selectedPod.id)
+                .single();
+              if (!party || party.current_member >= party.max_member) {
+                alert('이미 자리가 다 찼습니다!');
+                return;
+              }
+              // Check not already joined
+              const { data: existing } = await supabase
+                .from('party_members')
+                .select('user_id')
+                .eq('party_id', selectedPod.id)
+                .eq('user_id', user.id)
+                .single();
+              if (existing) {
+                alert('이미 참여한 팟입니다.');
+                return;
+              }
+              const { error: joinErr } = await supabase.from('party_members').insert({
+                party_id: selectedPod.id,
+                user_id: user.id,
+                status: 'joined'
+              });
+              if (joinErr) { alert('참여 실패: ' + joinErr.message); return; }
+              await supabase.from('parties').update({
+                current_member: party.current_member + 1
+              }).eq('id', selectedPod.id);
+              haptics.success();
+              alert('팟에 참여했습니다! 🎉');
               setSelectedPodId(null);
+              fetchPods();
             }}
+            isHost={selectedPod.hostId === user?.id}
+            user={user}
           />
         )}
 
@@ -277,6 +358,7 @@ export default function Home() {
           onCreatePod={() => setIsCreateSheetOpen(true)}
           onPodClick={setSelectedPodId}
           allPods={allPods}
+          user={user}
         />
       </div>
     </div>

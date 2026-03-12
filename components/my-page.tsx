@@ -1,9 +1,10 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Settings, QrCode, Upload, Clock, Users, ArrowRight, LogOut, LogIn } from 'lucide-react';
+import { Settings, QrCode, Upload, Clock, Users, ArrowRight, LogOut, LogIn, CreditCard, Edit2, Check } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { haptics } from '@/lib/haptics';
 
@@ -19,11 +20,26 @@ import { supabase } from '@/lib/supabase';
 
 export function MyPage({ user }: { user?: any }) {
   const [mannerTemp, setMannerTemp] = useState(36.5);
+  const [bankAccount, setBankAccount] = useState('');
+  const [isEditingAccount, setIsEditingAccount] = useState(false);
   const [hostingPods, setHostingPods] = useState<Pod[]>([]);
   const [joinedPods, setJoinedPods] = useState<Pod[]>([]);
 
   useEffect(() => {
     if (!user) return;
+
+    // Fetch user profile for manner score and bank account
+    supabase
+      .from('users')
+      .select('manner_score, bank_account')
+      .eq('id', user.id)
+      .single()
+      .then(({ data }) => {
+        if (data) {
+          if (data.manner_score !== undefined) setMannerTemp(data.manner_score);
+          if (data.bank_account) setBankAccount(data.bank_account);
+        }
+      });
 
     // Fetch pods I am hosting
     supabase
@@ -79,6 +95,23 @@ export function MyPage({ user }: { user?: any }) {
   const handleLogout = async () => {
     haptics.light();
     await supabase.auth.signOut();
+  };
+
+  const handleSaveBankAccount = async () => {
+    haptics.medium();
+    if (!user) return;
+
+    const { error } = await supabase
+      .from('users')
+      .update({ bank_account: bankAccount })
+      .eq('id', user.id);
+
+    if (error) {
+      console.error('Error saving bank account:', error);
+      alert('계좌 정보 저장 중 오류가 발생했습니다.');
+    } else {
+      setIsEditingAccount(false);
+    }
   };
 
   if (!user) {
@@ -170,7 +203,7 @@ export function MyPage({ user }: { user?: any }) {
           <div className="w-full h-3 bg-white/50 rounded-full overflow-hidden">
             <motion.div
               initial={{ width: 0 }}
-              animate={{ width: `${(mannerTemp / 50) * 100}%` }}
+              animate={{ width: `${mannerTemp}%` }}
               transition={{ duration: 1, delay: 0.2 }}
               className={`h-full bg-gradient-to-r ${getTempColor(mannerTemp)} rounded-full`}
             />
@@ -182,20 +215,49 @@ export function MyPage({ user }: { user?: any }) {
       </div>
 
       <div className="bg-[#F2F4F6] rounded-3xl p-6 mb-6">
-        <div className="flex items-center gap-3 mb-3">
-          <QrCode className="w-5 h-5 text-gray-600" />
-          <h3 className="font-bold text-[#191F28]">계좌 정보</h3>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <CreditCard className="w-5 h-5 text-gray-600" />
+            <h3 className="font-bold text-[#191F28]">계좌 정보</h3>
+          </div>
+          {bankAccount && !isEditingAccount && (
+            <button
+              onClick={() => setIsEditingAccount(true)}
+              className="text-sm font-semibold text-[#3182F6] flex items-center gap-1"
+            >
+              <Edit2 className="w-3.5 h-3.5" />
+              수정
+            </button>
+          )}
         </div>
-        <p className="text-sm text-gray-600 mb-4">
-          팟 멤버들이 송금할 때 사용할 QR 코드를 업로드하세요
-        </p>
-        <Button
-          onClick={() => haptics.light()}
-          className="w-full bg-white text-[#3182F6] border-2 border-[#3182F6] rounded-2xl h-12 font-semibold hover:bg-[#3182F6] hover:text-white transition-colors"
-        >
-          <Upload className="w-4 h-4 mr-2" />
-          QR 코드 업로드
-        </Button>
+
+        {!isEditingAccount && bankAccount ? (
+          <div className="bg-white rounded-2xl p-4 border border-gray-100 flex items-center justify-between">
+            <span className="font-medium text-[#191F28]">{bankAccount}</span>
+            <div className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center">
+              <Check className="w-4 h-4 text-green-500" />
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-gray-600">
+              팟 멤버들이 송금할 계좌번호를 입력해주세요.
+            </p>
+            <Input
+              value={bankAccount}
+              onChange={(e) => setBankAccount(e.target.value)}
+              placeholder="예: 신한 110-123-456789"
+              className="h-12 rounded-xl bg-white border-0"
+            />
+            <Button
+              onClick={handleSaveBankAccount}
+              disabled={!bankAccount.trim()}
+              className="w-full bg-[#3182F6] text-white rounded-xl h-12 font-semibold hover:bg-[#2968C8] transition-colors"
+            >
+              저장하기
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="bg-[#F2F4F6] rounded-3xl p-6">

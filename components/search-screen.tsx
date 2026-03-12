@@ -2,15 +2,20 @@
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Search, MapPin, Clock, Users, Package } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { haptics } from '@/lib/haptics';
+import { shortenAddress } from '@/components/map-selector';
 
 interface Pod {
   id: string;
   departure: string;
   destination: string;
+  startLat?: number;
+  startLng?: number;
+  endLat?: number;
+  endLng?: number;
   currentMembers: number;
   maxMembers: number;
   departureTime: string;
@@ -23,28 +28,68 @@ interface SearchScreenProps {
   onCreatePod: () => void;
   onPodClick: (podId: string) => void;
   allPods: Pod[];
+  user?: any;
 }
 
-export function SearchScreen({ isOpen, onClose, onCreatePod, onPodClick, allPods }: SearchScreenProps) {
+function getDistKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+export function SearchScreen({ isOpen, onClose, onCreatePod, onPodClick, allPods, user }: SearchScreenProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Pod[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
-  const handleSearch = (query: string) => {
+  const handleSearch = useCallback(async (query: string) => {
     setSearchQuery(query);
-    if (query.trim()) {
-      const results = allPods.filter(
-        pod =>
-          pod.departure.toLowerCase().includes(query.toLowerCase()) ||
-          pod.destination.toLowerCase().includes(query.toLowerCase())
-      );
-      setSearchResults(results);
-    } else {
-      setSearchResults([]);
+    if (!query.trim()) { setSearchResults([]); return; }
+
+    // 1) Text-based match
+    const textResults = allPods.filter(
+      pod =>
+        pod.departure?.toLowerCase().includes(query.toLowerCase()) ||
+        pod.destination?.toLowerCase().includes(query.toLowerCase())
+    );
+
+    // 2) Coordinate-based: geocode the query, find nearby pods
+    setIsSearching(true);
+    try {
+      const res = await fetch(`/api/geocode?query=${encodeURIComponent(query)}`);
+      const data = await res.json();
+
+      if (data.results?.length > 0) {
+        const { lat, lng } = data.results[0];
+        // Find pods within 5km of this location (check both start and end)
+        const nearbyPods = allPods.filter(pod => {
+          if (textResults.some(tr => tr.id === pod.id)) return false; // skip already matched
+          if (pod.startLat && pod.startLng) {
+            if (getDistKm(lat, lng, pod.startLat, pod.startLng) < 5) return true;
+          }
+          if (pod.endLat && pod.endLng) {
+            if (getDistKm(lat, lng, pod.endLat, pod.endLng) < 5) return true;
+          }
+          return false;
+        });
+        setSearchResults([...textResults, ...nearbyPods]);
+      } else {
+        setSearchResults(textResults);
+      }
+    } catch {
+      setSearchResults(textResults);
     }
-  };
+    setIsSearching(false);
+  }, [allPods]);
 
   const handleCreateFromSearch = () => {
     haptics.medium();
+    if (!user) {
+      alert('로그인이 필요합니다.');
+      return;
+    }
     onClose();
     onCreatePod();
   };

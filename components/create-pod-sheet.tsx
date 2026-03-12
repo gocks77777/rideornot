@@ -1,20 +1,25 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, MapPin, Clock, Users } from 'lucide-react';
+import { X, MapPin, Clock, Users, Edit3 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { haptics } from '@/lib/haptics';
 import { IosTimePicker } from '@/components/ui/ios-time-picker';
-import { MapSearchModal } from '@/components/map-search-modal';
+import { MapSelector, LocationInfo } from '@/components/map-selector';
 
 interface CreatePodSheetProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (data: {
     departure: string;
+    departureDetail?: string;
+    departureLat: number;
+    departureLng: number;
     destination: string;
+    destinationLat: number;
+    destinationLng: number;
     departureTime: string;
     maxMembers: number;
     genderPreference: 'male' | 'female' | 'any';
@@ -22,8 +27,9 @@ interface CreatePodSheetProps {
 }
 
 export function CreatePodSheet({ isOpen, onClose, onSubmit }: CreatePodSheetProps) {
-  const [departure, setDeparture] = useState('');
-  const [destination, setDestination] = useState('');
+  const [departure, setDeparture] = useState<LocationInfo | null>(null);
+  const [departureDetail, setDepartureDetail] = useState('');
+  const [destination, setDestination] = useState<LocationInfo | null>(null);
 
   const [isDepartureMapOpen, setIsDepartureMapOpen] = useState(false);
   const [isDestinationMapOpen, setIsDestinationMapOpen] = useState(false);
@@ -43,14 +49,20 @@ export function CreatePodSheet({ isOpen, onClose, onSubmit }: CreatePodSheetProp
     if (!departure || !destination) return;
     haptics.success();
     onSubmit({
-      departure,
-      destination,
+      departure: departure.address,
+      departureDetail: departureDetail.trim() || undefined,
+      departureLat: departure.lat,
+      departureLng: departure.lng,
+      destination: destination.address,
+      destinationLat: destination.lat,
+      destinationLng: destination.lng,
       departureTime: departureTime.toISOString(),
       maxMembers: neededMembers + 1, // Add host (1) to needed members
       genderPreference
     });
-    setDeparture('');
-    setDestination('');
+    setDeparture(null);
+    setDepartureDetail('');
+    setDestination(null);
     setNeededMembers(3);
     setGenderPreference('any');
     onClose();
@@ -100,9 +112,23 @@ export function CreatePodSheet({ isOpen, onClose, onSubmit }: CreatePodSheetProp
                     className="flex items-center w-full h-14 rounded-2xl bg-[#F2F4F6] px-5 cursor-pointer"
                   >
                     <span className={departure ? 'text-base text-[#191F28]' : 'text-base text-gray-400'}>
-                      {departure || '어디서 출발하시나요?'}
+                      {departure?.address || '어디서 출발하시나요?'}
                     </span>
                   </div>
+                  {departure && (
+                    <div className="mt-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Edit3 className="w-3.5 h-3.5 text-gray-400" />
+                        <span className="text-xs text-gray-500">상세 위치 (선택)</span>
+                      </div>
+                      <Input
+                        value={departureDetail}
+                        onChange={(e) => setDepartureDetail(e.target.value)}
+                        placeholder="예: 3번 출구, 정문 앞, GS25 옆"
+                        className="h-11 rounded-xl bg-[#F2F4F6] border-0 px-4 text-sm placeholder-gray-400"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -115,7 +141,7 @@ export function CreatePodSheet({ isOpen, onClose, onSubmit }: CreatePodSheetProp
                     className="flex items-center w-full h-14 rounded-2xl bg-[#F2F4F6] px-5 cursor-pointer"
                   >
                     <span className={destination ? 'text-base text-[#191F28]' : 'text-base text-gray-400'}>
-                      {destination || '어디로 가시나요?'}
+                      {destination?.address || '어디로 가시나요?'}
                     </span>
                   </div>
                 </div>
@@ -213,17 +239,25 @@ export function CreatePodSheet({ isOpen, onClose, onSubmit }: CreatePodSheetProp
             </div>
           </motion.div>
 
-          <MapSearchModal
+          <MapSelector
             isOpen={isDepartureMapOpen}
             onClose={() => setIsDepartureMapOpen(false)}
-            onSelect={(placeName, lat, lng) => setDeparture(placeName)}
-            title="출발지 검색"
+            onSelect={(location) => {
+              setDeparture(location);
+              setIsDepartureMapOpen(false);
+            }}
+            title="출발지 설정"
+            mode="departure"
           />
-          <MapSearchModal
+          <MapSelector
             isOpen={isDestinationMapOpen}
             onClose={() => setIsDestinationMapOpen(false)}
-            onSelect={(placeName, lat, lng) => setDestination(placeName)}
-            title="도착지 검색"
+            onSelect={(location) => {
+              setDestination(location);
+              setIsDestinationMapOpen(false);
+            }}
+            title="도착지 설정"
+            mode="destination"
           />
         </>
       )}

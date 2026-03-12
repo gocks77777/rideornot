@@ -3,10 +3,17 @@ import type { Metadata } from 'next';
 import Script from 'next/script';
 
 export const metadata: Metadata = {
-  title: 'Uni-Ride - 대학생 택시 공유',
-  description: '대학생을 위한 하이퍼-로컬 택시 공유 플랫폼',
+  title: '탈래말래?',
+  description: '택시비 아끼는 좋은 습관',
   manifest: '/manifest.json',
   themeColor: '#3182F6',
+  openGraph: {
+    title: '탈래말래?',
+    description: '택시비 아끼는 좋은 습관',
+    siteName: '탈래말래?',
+    locale: 'ko_KR',
+    type: 'website',
+  },
   viewport: {
     width: 'device-width',
     initialScale: 1,
@@ -17,7 +24,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'Uni-Ride',
+    title: '탈래말래?',
   },
 };
 
@@ -36,7 +43,7 @@ export default function RootLayout({
       <body className="antialiased overflow-x-hidden">
         <Script
           strategy="beforeInteractive"
-          src={`https://dapi.kakao.com/v2/maps/sdk.js?appkey=${process.env.NEXT_PUBLIC_KAKAO_JS_KEY}&libraries=services,clusterer&autoload=false`}
+          src={`https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${process.env.NEXT_PUBLIC_NAVER_CLIENT_ID}&submodules=geocoder`}
         />
         {children}
       </body>

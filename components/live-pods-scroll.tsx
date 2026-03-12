@@ -1,11 +1,13 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Users, Clock } from 'lucide-react';
+import { Users, Clock, ArrowRight } from 'lucide-react';
 import { haptics } from '@/lib/haptics';
+import { shortenAddress } from '@/components/map-selector';
 
 interface Pod {
   id: string;
+  departure: string;
   destination: string;
   currentMembers: number;
   maxMembers: number;
@@ -39,11 +41,18 @@ export function LivePodsScroll({ pods, onPodClick }: LivePodsScrollProps) {
               className="bg-[#F2F4F6] rounded-3xl p-5 shadow-sm cursor-pointer active:shadow-none transition-shadow"
             >
               <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xl">🔥</span>
-                  <span className="font-bold text-[#191F28] text-lg">{pod.destination}</span>
+                <div className="flex-1 min-w-0 mr-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-bold text-[#191F28] text-sm truncate">
+                      {shortenAddress(pod.departure) || '출발지'}
+                    </span>
+                    <ArrowRight className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                    <span className="font-bold text-[#3182F6] text-sm truncate">
+                      {shortenAddress(pod.destination) || '도착지'}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1 bg-white rounded-full px-2.5 py-1">
+                <div className="flex items-center gap-1 bg-white rounded-full px-2.5 py-1 flex-shrink-0">
                   <Users className="w-3.5 h-3.5 text-[#3182F6]" />
                   <span className="text-sm font-semibold text-[#3182F6]">
                     {pod.currentMembers}/{pod.maxMembers}
