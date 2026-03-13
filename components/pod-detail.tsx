@@ -151,25 +151,37 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
           const data = await res.json();
 
           if (data.path && data.path.length > 0) {
-            // Draw real road route
+            // Draw real road route with gradient-like or solid bold style
             const routePath = data.path.map(
               (coord: number[]) => new naver.maps.LatLng(coord[1], coord[0]) // [lng, lat] -> LatLng(lat, lng)
             );
 
+            // 외곽선(그림자) 효과를 위한 백그라운드 라인
             new naver.maps.Polyline({
               map: map,
               path: routePath,
-              strokeColor: '#3182F6',
-              strokeWeight: 5,
-              strokeOpacity: 0.8,
+              strokeColor: '#1E5BBF', // 짙은 파란색
+              strokeWeight: 7,
+              strokeOpacity: 0.3,
               strokeLineCap: 'round',
               strokeLineJoin: 'round',
             });
 
-            // Re-fit bounds to include the route
+            // 메인 경로 라인 (카카오T 스타일 쨍한 파란색)
+            new naver.maps.Polyline({
+              map: map,
+              path: routePath,
+              strokeColor: '#3182F6',
+              strokeWeight: 4,
+              strokeOpacity: 1,
+              strokeLineCap: 'round',
+              strokeLineJoin: 'round',
+            });
+
+            // Re-fit bounds to include the route with some padding
             const routeBounds = new naver.maps.LatLngBounds();
             routePath.forEach((p: any) => routeBounds.extend(p));
-            map.fitBounds(routeBounds, { top: 40, right: 40, bottom: 40, left: 40 });
+            map.fitBounds(routeBounds, { top: 60, right: 40, bottom: 40, left: 40 });
 
             // Update taxi fare if available from API
             if (data.taxiFare && data.taxiFare > 0) {
@@ -179,7 +191,7 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
               setRouteDuration(Math.round(data.duration / 60000)); // ms to minutes
             }
           } else {
-            // Fallback: dashed line
+            // Fallback: dashed line if no route found
             new naver.maps.Polyline({
               map: map,
               path: [startPos, endPos],
@@ -190,7 +202,7 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
             });
           }
         } catch {
-          // Fallback: dashed line
+          // Fallback: dashed line on error
           new naver.maps.Polyline({
             map: map,
             path: [startPos, endPos],

@@ -12,6 +12,7 @@ import { MyPage } from '@/components/my-page';
 import { SearchScreen } from '@/components/search-screen';
 import { PushGuideSheet } from '@/components/push-guide-sheet';
 import { PodListSkeleton, LivePodsSkeleton } from '@/components/loading-skeleton';
+import { GenderOnboarding } from '@/components/gender-onboarding';
 import { haptics } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
 
@@ -37,8 +38,10 @@ export default function Home() {
   const [pushGuideOpen, setPushGuideOpen] = useState(false);
   const [selectedPodId, setSelectedPodId] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
+  const [userGender, setUserGender] = useState<'male' | 'female' | null>(null);
   const [allPods, setAllPods] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [currentLocationName, setCurrentLocationName] = useState<string | null>(null);
 
   const fetchPods = async () => {
     setIsLoading(true);
@@ -73,6 +76,7 @@ export default function Home() {
           endLng: p.end_lng,
           currentMembers: p.current_member,
           maxMembers: p.max_member,
+          genderFilter: p.gender_filter || 'any',
           departureTime: new Date(p.departure_time).toLocaleString('ko-KR', {
             month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
           }),
@@ -92,18 +96,64 @@ export default function Home() {
     setIsLoading(false);
   };
 
+  const checkUserGender = async (userId: string) => {
+    const { data } = await supabase.from('users').select('gender').eq('id', userId).single();
+    if (data?.gender) {
+      setUserGender(data.gender);
+    }
+  };
+
   useEffect(() => {
     // Session 체크
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
+      const currentUser = session?.user ?? null;
+      setUser(currentUser);
+      if (currentUser) checkUserGender(currentUser.id);
     });
 
     // 인증 상태 변화 구독
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+      const currentUser = session?.user ?? null;
+      setUser(currentUser);
+      if (currentUser) checkUserGender(currentUser.id);
     });
 
     fetchPods();
+
+    // 2. 위치 기반 맞춤 인사말을 위한 Geolocation 호출
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          
+          // 네이버 Reverse Geocoding 호출 (클라이언트 단에서 직접 호출하거나 API 라우트를 사용할 수 있으나 
+          // 브라우저 naver.maps가 로드되어 있으면 그것을 활용하는 것이 가장 빠릅니다)
+          const checkNaverMap = setInterval(() => {
+            const naver = (window as any).naver;
+            if (naver?.maps?.Service?.reverseGeocode) {
+              clearInterval(checkNaverMap);
+              const coord = new naver.maps.LatLng(lat, lng);
+              naver.maps.Service.reverseGeocode({ coords: coord }, (status: any, response: any) => {
+                if (status === naver.maps.Service.Status.OK && response?.v2?.address) {
+                  const addr = response.v2.address;
+                  // 읍/면/동만 추출 (예: 충청북도 청주시 흥덕구 오송읍 -> 오송읍)
+                  const parts = (addr.roadAddress || addr.jibunAddress || '').split(' ');
+                  const dong = parts.find((p: string) => /[읍면동]$/.test(p));
+                  if (dong) setCurrentLocationName(dong);
+                }
+              });
+            }
+          }, 500);
+          
+          // 5초 뒤에도 못 찾으면 interval 종료
+          setTimeout(() => clearInterval(checkNaverMap), 5000);
+        },
+        (err) => {
+          console.warn('Geolocation error:', err);
+        }
+      );
+    }
 
     return () => subscription.unsubscribe();
   }, []);
@@ -241,8 +291,12 @@ export default function Home() {
                 </div>
                 <h1 className="text-4xl font-bold text-[#191F28] leading-tight mb-2 relative z-10">
                   {user
-                    ? `${user?.user_metadata?.full_name || user?.user_metadata?.name || '운전자'}님!\n오늘도 택시비 아껴볼까요?`
-                    : '반가워요! 👋\n오늘도 택시비 아껴볼까요?'}
+                    ? currentLocationName 
+                      ? `${user?.user_metadata?.full_name || user?.user_metadata?.name || '운전자'}님!\n지금 ${currentLocationName}에서 출발하시나요?`
+                      : `${user?.user_metadata?.full_name || user?.user_metadata?.name || '운전자'}님!\n오늘도 택시비 아껴볼까요?`
+                    : currentLocationName
+                      ? `반가워요! 👋\n지금 ${currentLocationName}에서 출발하시나요?`
+                      : '반가워요! 👋\n오늘도 택시비 아껴볼까요?'}
                 </h1>
               </motion.div>
 
@@ -323,12 +377,30 @@ export default function Home() {
           onSubmit={handleCreatePod}
         />
 
+        <GenderOnboarding 
+          user={user} 
+          onComplete={(gender) => setUserGender(gender)} 
+        />
+
         {selectedPod && (
           <PodDetail
             pod={selectedPod}
             onBack={() => setSelectedPodId(null)}
             onJoin={async () => {
               if (!user) { alert('로그인이 필요합니다.'); return; }
+              
+              // 성별 필터 체크
+              if (selectedPod.genderFilter !== 'any') {
+                if (!userGender) {
+                  alert('성별 정보가 없어 참여할 수 없습니다. 새로고침 후 성별을 설정해주세요.');
+                  return;
+                }
+                if (selectedPod.genderFilter !== userGender) {
+                  alert(selectedPod.genderFilter === 'male' ? '남자만 참여할 수 있는 팟입니다.' : '여자만 참여할 수 있는 팟입니다.');
+                  return;
+                }
+              }
+
               // Atomic join: check current_member < max_member
               const { data: party } = await supabase
                 .from('parties')
