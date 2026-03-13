@@ -10,6 +10,7 @@ import { CreatePodSheet } from '@/components/create-pod-sheet';
 import { PodDetail } from '@/components/pod-detail';
 import { MyPage } from '@/components/my-page';
 import { SearchScreen } from '@/components/search-screen';
+import { PushGuideSheet } from '@/components/push-guide-sheet';
 import { PodListSkeleton, LivePodsSkeleton } from '@/components/loading-skeleton';
 import { haptics } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
@@ -33,6 +34,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState('home');
   const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false);
   const [searchSheetOpen, setSearchSheetOpen] = useState(false);
+  const [pushGuideOpen, setPushGuideOpen] = useState(false);
   const [selectedPodId, setSelectedPodId] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
   const [allPods, setAllPods] = useState<any[]>([]);
@@ -211,7 +213,10 @@ export default function Home() {
                 )}
                 <motion.button
                   whileTap={{ scale: 0.9 }}
-                  onClick={() => haptics.light()}
+                  onClick={() => {
+                    haptics.light();
+                    setPushGuideOpen(true);
+                  }}
                   className="w-10 h-10 rounded-full bg-[#F2F4F6] flex items-center justify-center active:bg-gray-200 transition-colors"
                 >
                   <Bell className="w-5 h-5 text-gray-600" />
@@ -385,6 +390,12 @@ export default function Home() {
           onCreatePod={() => setIsCreateSheetOpen(true)}
           onPodClick={setSelectedPodId}
           allPods={allPods}
+          user={user}
+        />
+
+        <PushGuideSheet
+          isOpen={pushGuideOpen}
+          onClose={() => setPushGuideOpen(false)}
           user={user}
         />
       </div>
