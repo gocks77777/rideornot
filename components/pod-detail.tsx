@@ -317,12 +317,31 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
     haptics.light();
   };
 
-  const togglePaidStatus = (participantId: string) => {
+  const togglePaidStatus = async (participantId: string) => {
+    // 1. 낙관적 UI 업데이트
+    const newStatus = !participantsPaidStatus[participantId];
     setParticipantsPaidStatus(prev => ({
       ...prev,
-      [participantId]: !prev[participantId]
+      [participantId]: newStatus
     }));
     haptics.light();
+
+    // 2. DB 업데이트
+    const { error } = await supabase
+      .from('party_members')
+      .update({ status: newStatus ? 'paid' : 'joined' })
+      .eq('party_id', pod.id)
+      .eq('user_id', participantId);
+
+    // 3. 실패 시 롤백
+    if (error) {
+      console.error('Failed to update paid status:', error);
+      setParticipantsPaidStatus(prev => ({
+        ...prev,
+        [participantId]: !newStatus
+      }));
+      alert('송금 상태 변경에 실패했습니다.');
+    }
   };
 
   const handleJoinClick = () => {
@@ -337,6 +356,25 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
   const handlePaymentConfirm = () => {
     setShowPaymentModal(false);
     onJoin?.();
+  };
+
+  const handleCancelPod = async () => {
+    if (!window.confirm('정말 이 팟을 취소(폭파)하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) return;
+    
+    haptics.heavy();
+    const { error } = await supabase
+      .from('parties')
+      .update({ status: 'cancelled' })
+      .eq('id', pod.id)
+      .eq('host_id', user.id);
+
+    if (error) {
+      alert('팟 취소에 실패했습니다.');
+      console.error(error);
+    } else {
+      alert('팟이 성공적으로 취소되었습니다.');
+      onBack(); // 메인 화면으로 돌아가기
+    }
   };
 
   const isMember = user && pod.participants.some(p => p.id === user.id);
@@ -571,6 +609,17 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
         <div className="fixed bottom-0 left-0 right-0 p-6 bg-white border-t border-gray-100" style={{ maxWidth: '480px', margin: '0 auto' }}>
           <Button disabled className="w-full bg-gray-200 text-gray-500 rounded-full py-6 text-lg font-bold cursor-not-allowed">
             참여 완료 ✅
+          </Button>
+        </div>
+      )}
+
+      {isHost && (
+        <div className="fixed bottom-0 left-0 right-0 p-6 bg-white border-t border-gray-100" style={{ maxWidth: '480px', margin: '0 auto' }}>
+          <Button 
+            onClick={handleCancelPod}
+            className="w-full bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-600 rounded-full py-6 text-lg font-bold transition-colors"
+          >
+            이 팟 취소하기 (폭파)
           </Button>
         </div>
       )}

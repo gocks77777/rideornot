@@ -45,6 +45,10 @@ export default function Home() {
 
   const fetchPods = async () => {
     setIsLoading(true);
+    
+    // 현재 시간 구하기 (ISO 포맷)
+    const now = new Date().toISOString();
+
     const { data, error } = await supabase
       .from('parties')
       .select(`
@@ -52,6 +56,8 @@ export default function Home() {
         host:users!parties_host_id_fkey(nickname, avatar_url, manner_score, bank_account),
         party_members(user_id, status, user:users(nickname, avatar_url))
       `)
+      .gte('departure_time', now) // 현재 시간 이후에 출발하는 팟만 필터링
+      .neq('status', 'cancelled') // 취소된 팟 제외
       .order('departure_time', { ascending: true });
 
     if (data) {
