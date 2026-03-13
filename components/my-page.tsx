@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Settings, QrCode, Upload, Clock, Users, ArrowRight, LogOut, LogIn, CreditCard, Edit2, Check } from 'lucide-react';
+import { Settings, QrCode, Upload, Clock, Users, ArrowRight, LogOut, LogIn, CreditCard, Edit2, Check, BellRing, CheckCircle2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,6 +24,7 @@ export function MyPage({ user }: { user?: any }) {
   const [isEditingAccount, setIsEditingAccount] = useState(false);
   const [hostingPods, setHostingPods] = useState<Pod[]>([]);
   const [joinedPods, setJoinedPods] = useState<Pod[]>([]);
+  const [isPushEnabled, setIsPushEnabled] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -83,7 +84,91 @@ export function MyPage({ user }: { user?: any }) {
           setJoinedPods(joined);
         }
       });
+
+    // Check if push is already enabled
+    if ('serviceWorker' in navigator && 'PushManager' in window) {
+      navigator.serviceWorker.getRegistration().then(reg => {
+        if (reg) {
+          reg.pushManager.getSubscription().then(sub => {
+            setIsPushEnabled(!!sub);
+          });
+        }
+      });
+    }
   }, [user]);
+
+  // URL Base64 to Uint8Array converter
+  function urlBase64ToUint8Array(base64String: string) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding)
+      .replace(/\-/g, '+')
+      .replace(/_/g, '/');
+  
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+  
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  }
+
+  const handleEnablePush = async () => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      alert('이 브라우저는 푸시 알림을 지원하지 않습니다.');
+      return;
+    }
+
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        alert('알림 권한이 거부되었습니다.');
+        return;
+      }
+
+      const registration = await navigator.serviceWorker.register('/sw.js');
+      const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      
+      if (!vapidPublicKey) {
+        console.error('VAPID Public Key is missing');
+        alert('서버에 VAPID 키가 설정되지 않았습니다.');
+        return;
+      }
+
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
+      });
+
+      const subData = JSON.parse(JSON.stringify(subscription));
+
+      const { error } = await supabase.from('push_subscriptions').insert({
+        user_id: user.id,
+        endpoint: subData.endpoint,
+        p256dh: subData.keys.p256dh,
+        auth: subData.keys.auth
+      });
+
+      if (error) {
+        if (error.code === '23505') { // Unique constraint violation (already registered)
+          setIsPushEnabled(true);
+          haptics.success();
+          alert('알림 설정이 완료되었습니다!');
+          return;
+        }
+        console.error('Failed to save subscription:', error);
+        alert('알림 설정 저장 중 오류가 발생했습니다.');
+        return;
+      }
+
+      setIsPushEnabled(true);
+      haptics.success();
+      alert('알림 설정이 완료되었습니다! 팟 참여/댓글 알림을 받을 수 있습니다.');
+    } catch (e) {
+      console.error('Push setup failed', e);
+      alert('푸시 알림 설정에 실패했습니다. (아이폰의 경우 홈 화면에 앱을 추가한 뒤 실행해주세요.)');
+    }
+  };
 
   const handleKakaoLogin = async () => {
     haptics.light();
@@ -211,6 +296,31 @@ export function MyPage({ user }: { user?: any }) {
           <p className="text-xs text-gray-600 mt-2">
             다른 사용자들이 평가한 매너 점수입니다
           </p>
+        </div>
+      </div>
+
+      {/* Push Notification Setting */}
+      <div className="bg-[#F2F4F6] rounded-3xl p-6 mb-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <BellRing className="w-5 h-5 text-gray-600" />
+            <div>
+              <h3 className="font-bold text-[#191F28]">푸시 알림</h3>
+              <p className="text-xs text-gray-500 mt-0.5">팟 참여, 새 댓글 알림 받기</p>
+            </div>
+          </div>
+          {isPushEnabled ? (
+            <div className="px-3 py-1.5 rounded-full bg-green-100 text-green-700 text-xs font-bold flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3" /> 사용 중
+            </div>
+          ) : (
+            <Button 
+              onClick={handleEnablePush}
+              className="h-8 text-xs bg-[#3182F6] hover:bg-[#2968C8] text-white rounded-full px-4"
+            >
+              알림 켜기
+            </Button>
+          )}
         </div>
       </div>
 
