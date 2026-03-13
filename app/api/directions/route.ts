@@ -18,6 +18,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Missing API credentials' }, { status: 500 });
   }
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 3000);
+
   try {
     // Naver Directions5 API: start/goal format is "lng,lat"
     const start = `${startLng},${startLat}`;
@@ -33,7 +36,10 @@ export async function GET(request: Request) {
         'X-NCP-APIGW-API-KEY-ID': clientId,
         'X-NCP-APIGW-API-KEY': clientSecret,
       },
+      signal: controller.signal
     });
+    
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       const text = await response.text();
@@ -58,7 +64,11 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({ path: [], error: 'No route found' });
-  } catch (error) {
+  } catch (error: any) {
+    if (error.name === 'AbortError') {
+      console.warn('Naver Directions API timeout after 3s');
+      return NextResponse.json({ path: [], error: 'API Timeout' }, { status: 504 });
+    }
     console.error('Directions error:', error);
     return NextResponse.json({ path: [], error: 'Internal error' });
   }

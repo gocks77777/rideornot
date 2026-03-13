@@ -8,6 +8,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ results: [] });
   }
 
+  // 타임아웃을 3초로 설정하여 외부 API 지연이 앱 전체 장애로 번지지 않도록 방어합니다.
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 3000);
+
   // 1차: Naver Search Local API (장소명 검색: "오송역", "청주대" 등)
   const searchId = process.env.NAVER_SEARCH_CLIENT_ID;
   const searchSecret = process.env.NAVER_SEARCH_CLIENT_SECRET;
@@ -21,6 +25,7 @@ export async function GET(request: Request) {
           'X-Naver-Client-Id': searchId,
           'X-Naver-Client-Secret': searchSecret,
         },
+        signal: controller.signal
       });
 
       if (response.ok) {
@@ -37,8 +42,12 @@ export async function GET(request: Request) {
           return NextResponse.json({ results });
         }
       }
-    } catch (error) {
-      console.error('Naver Search error:', error);
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        console.warn('Naver Search API timeout after 3s');
+      } else {
+        console.error('Naver Search error:', error);
+      }
     }
   }
 
@@ -54,6 +63,7 @@ export async function GET(request: Request) {
           'X-NCP-APIGW-API-KEY-ID': clientId,
           'X-NCP-APIGW-API-KEY': clientSecret,
         },
+        signal: controller.signal
       });
 
       if (response.ok) {
@@ -68,11 +78,16 @@ export async function GET(request: Request) {
           return NextResponse.json({ results });
         }
       }
-    } catch {
-      // fall through
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        console.warn('Naver Geocode API timeout after 3s');
+      } else {
+        console.error('Naver Geocode error:', error);
+      }
     }
   }
-
+  
+  clearTimeout(timeoutId);
   return NextResponse.json({ results: [] });
 }
 
