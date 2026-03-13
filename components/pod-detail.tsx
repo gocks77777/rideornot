@@ -362,32 +362,48 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
         )}
 
         {/* Route Info */}
-        <div className="bg-[#F2F4F6] rounded-3xl p-6">
-          <h2 className="text-sm font-semibold text-gray-600 mb-4">경로</h2>
-          <div className="relative pl-8">
-            <div className="absolute left-2 top-3 bottom-3 w-0.5 bg-gradient-to-b from-[#3182F6] to-[#FFA500]"></div>
-            <div className="relative mb-6">
-              <div className="absolute -left-6 top-1 w-4 h-4 rounded-full bg-[#3182F6] border-4 border-white"></div>
-              <div>
-                <p className="text-sm text-gray-600 mb-1">출발</p>
-                <p className="font-bold text-[#191F28] text-lg">{pod.departure}</p>
+        <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
+          <h2 className="text-sm font-semibold text-gray-400 mb-5 tracking-wide">여정 정보</h2>
+          
+          <div className="relative pl-3">
+            {/* 세로 연결 선 (점선 스타일) */}
+            <div className="absolute left-[7px] top-[24px] bottom-[24px] w-[2px] bg-gray-200 border-l-[2px] border-dashed border-gray-300"></div>
+            
+            {/* 출발지 */}
+            <div className="relative mb-8 flex items-start">
+              <div className="absolute -left-3 top-1 w-4 h-4 rounded-full bg-[#3182F6] shadow-[0_0_0_4px_rgba(49,130,246,0.15)] z-10"></div>
+              <div className="ml-6 flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs font-bold text-[#3182F6] bg-blue-50 px-2 py-0.5 rounded-md">출발</span>
+                </div>
+                <p className="font-bold text-[#191F28] text-[1.1rem] leading-tight mt-1">{pod.departure}</p>
                 {pod.departureDetail && (
-                  <p className="text-sm text-[#3182F6] mt-0.5">📍 {pod.departureDetail}</p>
+                  <div className="flex items-center gap-1 mt-1.5 bg-gray-50 rounded-lg px-2.5 py-1.5 w-fit">
+                    <MapPin className="w-3.5 h-3.5 text-gray-500" />
+                    <p className="text-sm text-gray-600 font-medium">{pod.departureDetail}</p>
+                  </div>
                 )}
               </div>
             </div>
-            <div className="relative">
-              <div className="absolute -left-6 top-1 w-4 h-4 rounded-full bg-[#FFA500] border-4 border-white"></div>
-              <div>
-                <p className="text-sm text-gray-600 mb-1">도착</p>
-                <p className="font-bold text-[#191F28] text-lg">{pod.destination}</p>
+
+            {/* 도착지 */}
+            <div className="relative flex items-start">
+              <div className="absolute -left-3 top-1 w-4 h-4 rounded-full bg-[#FFA500] shadow-[0_0_0_4px_rgba(255,165,0,0.15)] z-10"></div>
+              <div className="ml-6 flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs font-bold text-[#FFA500] bg-orange-50 px-2 py-0.5 rounded-md">도착</span>
+                </div>
+                <p className="font-bold text-[#191F28] text-[1.1rem] leading-tight mt-1">{pod.destination}</p>
               </div>
             </div>
           </div>
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <div className="flex items-center gap-2 text-[#FFA500]">
-              <Clock className="w-5 h-5" />
-              <span className="font-semibold">{pod.departureTime}</span>
+
+          <div className="mt-6 pt-5 border-t border-gray-100 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-[#191F28]">
+              <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+                <Clock className="w-4 h-4 text-gray-600" />
+              </div>
+              <span className="font-bold text-[15px]">{pod.departureTime} 출발</span>
             </div>
           </div>
         </div>
