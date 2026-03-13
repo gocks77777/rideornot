@@ -50,10 +50,22 @@ WITH CHECK (auth.uid() = host_id);
 -- 팟을 만든 방장(host)만이 팟의 정보를 수정하거나 마감시킬 수 있습니다.
 -- 추가로, 시스템에서 트리거로 current_member를 올리는 경우도 있으므로 SELECT 권한이 있다면 누구나 update할 수 있게 열되,
 -- 보통 Supabase client에서 update할 때는 auth.uid()가 맞거나 서비스 롤로 업데이트합니다.
--- (여기서는 현재 인원수 업데이트를 위해 일단 인증된 유저는 팟 상태를 업데이트할 수 있게 허용합니다. 엄격하게 하려면 Edge Function이 필요함)
-CREATE POLICY "Authenticated users can update party." 
+-- 팟을 만든 방장(host)만이 팟의 정보를 수정하거나 마감시킬 수 있습니다.
+CREATE POLICY "Host can update their own party." 
 ON public.parties FOR UPDATE 
-USING (auth.role() = 'authenticated');
+USING (auth.uid() = host_id)
+WITH CHECK (auth.uid() = host_id);
+
+-- 누구나 팟의 `status`를 `cancelled`로 업데이트할 수 있게 허용
+CREATE POLICY "Anyone can cancel a party." 
+ON public.parties FOR UPDATE
+USING (true) 
+WITH CHECK (status IN (
+    'recruiting',
+    'full',
+    'departed',
+    'cancelled'
+));
 
 
 -- ==========================================

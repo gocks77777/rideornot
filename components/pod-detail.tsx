@@ -388,7 +388,7 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
       className="fixed inset-0 bg-white z-50 overflow-y-auto pb-24"
       style={{ maxWidth: '480px', margin: '0 auto' }}
     >
-      <header className="sticky top-0 bg-white z-10 px-6 py-4 flex items-center gap-3 border-b border-gray-100" style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+      <header className="sticky top-0 bg-white z-[11] px-6 py-4 flex items-center gap-3 border-b border-gray-100" style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <button
           onClick={() => { haptics.light(); onBack(); }}
           className="w-10 h-10 rounded-full bg-[#F2F4F6] flex items-center justify-center active:scale-95 transition-transform mt-[max(5px, env(safe-area-inset-top))]"
