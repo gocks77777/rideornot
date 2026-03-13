@@ -1,7 +1,7 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { BellRing, X, Share, PlusSquare, Info, CheckCircle2 } from 'lucide-react';
+import { BellRing, X, Share, PlusSquare, Info, CheckCircle2, ExternalLink, Settings } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { haptics } from '@/lib/haptics';
@@ -18,9 +18,11 @@ export function PushGuideSheet({ isOpen, onClose, user }: PushGuideSheetProps) {
   const [isStandalone, setIsStandalone] = useState(false);
   const [isPushEnabled, setIsPushEnabled] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isInAppBrowser, setIsInAppBrowser] = useState(false);
+  const [permissionStatus, setPermissionStatus] = useState<NotificationPermission>('default');
 
   useEffect(() => {
-    // 1. 기기 종류 판별
+    // 1. 기기 종류 및 인앱 브라우저 판별
     const ua = navigator.userAgent.toLowerCase();
     if (/iphone|ipad|ipod/.test(ua)) {
       setDeviceType('ios');
@@ -30,11 +32,21 @@ export function PushGuideSheet({ isOpen, onClose, user }: PushGuideSheetProps) {
       setDeviceType('desktop');
     }
 
+    // 카카오톡, 라인, 인스타그램, 네이버 등 인앱 브라우저 감지
+    const inAppRegex = /kakaotalk|instagram|naver|line|fbav/i;
+    if (inAppRegex.test(ua)) {
+      setIsInAppBrowser(true);
+    }
+
     // 2. iOS에서 "홈 화면에 추가(PWA)"로 실행되었는지 판별
     const isPWA = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
     setIsStandalone(isPWA);
 
-    // 3. 현재 알림 구독 상태 확인
+    // 3. 현재 알림 권한 상태 및 구독 상태 확인
+    if ('Notification' in window) {
+      setPermissionStatus(Notification.permission);
+    }
+
     if ('serviceWorker' in navigator && 'PushManager' in window) {
       navigator.serviceWorker.getRegistration().then(reg => {
         if (reg) {
@@ -74,10 +86,11 @@ export function PushGuideSheet({ isOpen, onClose, user }: PushGuideSheetProps) {
 
     try {
       const permission = await Notification.requestPermission();
+      setPermissionStatus(permission);
+      
       if (permission !== 'granted') {
-        alert('알림 권한이 거부되었습니다. 브라우저 설정에서 알림을 허용해주세요.');
         setIsLoading(false);
-        return;
+        return; // UI에서 권한 거부 안내(Guide) 렌더링으로 자연스럽게 넘어감
       }
 
       const registration = await navigator.serviceWorker.register('/sw.js');
@@ -156,7 +169,8 @@ export function PushGuideSheet({ isOpen, onClose, user }: PushGuideSheetProps) {
                 </button>
               </div>
 
-              {isPushEnabled ? (
+              {/* 1. 이미 켜져있는 경우 */}
+              {isPushEnabled && permissionStatus === 'granted' ? (
                 <div className="bg-green-50 rounded-3xl p-6 text-center my-6">
                   <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-3" />
                   <h3 className="text-lg font-bold text-green-800 mb-1">알림이 켜져 있어요!</h3>
@@ -170,8 +184,54 @@ export function PushGuideSheet({ isOpen, onClose, user }: PushGuideSheetProps) {
                     앱을 켜두지 않아도 중요한 알림을 놓치지 마세요!
                   </p>
 
-                  {/* iOS 가이드 (웹앱 설치 안된 경우) */}
-                  {deviceType === 'ios' && !isStandalone && (
+                  {/* 2. 인앱 브라우저로 접속한 경우 (최우선 차단) */}
+                  {isInAppBrowser && (
+                    <div className="bg-red-50 rounded-2xl p-5 border border-red-100">
+                      <div className="flex items-start gap-3">
+                        <ExternalLink className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <h4 className="font-bold text-red-800 mb-2">외부 브라우저로 열어주세요</h4>
+                          <p className="text-sm text-red-700 mb-3 leading-relaxed">
+                            현재 카카오톡 등 내부 브라우저에서는 알림을 받을 수 없습니다. 화면 우측 하단의 <strong className="text-red-900">⋮ 버튼</strong>을 눌러 <strong className="text-red-900">다른 브라우저로 열기(Safari/Chrome)</strong>를 선택해주세요.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 3. 알림 권한을 실수로 '거부'한 경우 (수동 설정 안내) */}
+                  {!isInAppBrowser && permissionStatus === 'denied' && (
+                    <div className="bg-gray-100 rounded-2xl p-5">
+                      <div className="flex items-start gap-3">
+                        <Settings className="w-5 h-5 text-gray-600 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <h4 className="font-bold text-[#191F28] mb-2">알림이 차단되어 있습니다</h4>
+                          <p className="text-sm text-gray-600 mb-4 leading-relaxed">
+                            기기 설정에서 알림 권한을 직접 켜주셔야 합니다.
+                          </p>
+                          
+                          {deviceType === 'ios' ? (
+                            <div className="bg-white rounded-xl p-4 text-sm text-gray-700 space-y-2 shadow-sm border border-gray-200">
+                              <p>1. 아이폰 <strong>설정</strong> 앱 실행</p>
+                              <p>2. 아래로 스크롤하여 <strong>탈래말래?</strong> 앱 선택</p>
+                              <p>3. <strong>알림</strong> 선택</p>
+                              <p>4. <strong>알림 허용</strong> 스위치 켜기</p>
+                            </div>
+                          ) : (
+                            <div className="bg-white rounded-xl p-4 text-sm text-gray-700 space-y-2 shadow-sm border border-gray-200">
+                              <p>1. 주소창 왼쪽의 <strong>자물쇠 🔒 아이콘</strong> 터치</p>
+                              <p>2. <strong>권한</strong> 또는 <strong>사이트 설정</strong> 선택</p>
+                              <p>3. <strong>알림</strong> 선택</p>
+                              <p>4. <strong>허용</strong>으로 변경 후 새로고침</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 4. iOS 가이드 (웹앱 설치 안된 경우 & 거부 안함) */}
+                  {!isInAppBrowser && permissionStatus !== 'denied' && deviceType === 'ios' && !isStandalone && (
                     <div className="bg-orange-50 rounded-2xl p-5 border border-orange-100">
                       <div className="flex items-start gap-3">
                         <Info className="w-5 h-5 text-orange-500 flex-shrink-0 mt-0.5" />
@@ -189,8 +249,8 @@ export function PushGuideSheet({ isOpen, onClose, user }: PushGuideSheetProps) {
                     </div>
                   )}
 
-                  {/* 일반적인 알림 허용 안내 (Android, Desktop, iOS PWA) */}
-                  {(deviceType !== 'ios' || isStandalone) && (
+                  {/* 5. 일반적인 알림 허용 안내 (Android, Desktop, iOS PWA & 거부 안함) */}
+                  {!isInAppBrowser && permissionStatus !== 'denied' && (deviceType !== 'ios' || isStandalone) && (
                     <div className="bg-[#F2F4F6] rounded-2xl p-5">
                       <div className="flex items-center gap-4 mb-3">
                         <div className="w-12 h-12 bg-white rounded-full shadow-sm flex items-center justify-center flex-shrink-0">
