@@ -10,6 +10,7 @@ import { CreatePodSheet } from '@/components/create-pod-sheet';
 import { PodDetail } from '@/components/pod-detail';
 import { MyPage } from '@/components/my-page';
 import { SearchScreen } from '@/components/search-screen';
+import { PodListSkeleton, LivePodsSkeleton } from '@/components/loading-skeleton';
 import { haptics } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
 
@@ -35,8 +36,10 @@ export default function Home() {
   const [selectedPodId, setSelectedPodId] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
   const [allPods, setAllPods] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   const fetchPods = async () => {
+    setIsLoading(true);
     const { data, error } = await supabase
       .from('parties')
       .select(`
@@ -84,6 +87,7 @@ export default function Home() {
       });
       setAllPods(formatted);
     }
+    setIsLoading(false);
   };
 
   useEffect(() => {
@@ -258,7 +262,11 @@ export default function Home() {
                 </motion.button>
               </motion.div>
 
-              <LivePodsScroll pods={livePods} onPodClick={setSelectedPodId} />
+              {isLoading ? (
+                <LivePodsSkeleton />
+              ) : (
+                <LivePodsScroll pods={livePods} onPodClick={setSelectedPodId} />
+              )}
             </motion.div>
           )}
 
@@ -275,7 +283,11 @@ export default function Home() {
                 <h1 className="text-3xl font-bold text-[#191F28]">팟 목록</h1>
                 <p className="text-gray-600 mt-1">모집중인 택시팟을 확인하세요</p>
               </header>
-              <PodList pods={allPods} onPodClick={setSelectedPodId} />
+              {isLoading ? (
+                <PodListSkeleton />
+              ) : (
+                <PodList pods={allPods} onPodClick={setSelectedPodId} />
+              )}
             </motion.div>
           )}
 
@@ -333,19 +345,34 @@ export default function Home() {
                 alert('이미 참여한 팟입니다.');
                 return;
               }
+              
+              // Optimistic UI Update (즉각적인 화면 반영)
+              setAllPods(prev => prev.map(p => 
+                p.id === selectedPod.id 
+                  ? { 
+                      ...p, 
+                      currentMembers: p.currentMembers + 1,
+                      participants: [...p.participants, { id: user.id, name: user.user_metadata?.nickname || '멤버', avatar: user.user_metadata?.avatar_url || '' }]
+                    }
+                  : p
+              ));
+              setSelectedPodId(null);
+              haptics.success();
+              alert('팟에 참여했습니다! 🎉');
+
               const { error: joinErr } = await supabase.from('party_members').insert({
                 party_id: selectedPod.id,
                 user_id: user.id,
                 status: 'joined'
               });
-              if (joinErr) { alert('참여 실패: ' + joinErr.message); return; }
+              if (joinErr) { 
+                alert('참여 실패: ' + joinErr.message); 
+                fetchPods(); // 실패 시 롤백 (다시 데이터 패치)
+                return; 
+              }
               await supabase.from('parties').update({
                 current_member: party.current_member + 1
               }).eq('id', selectedPod.id);
-              haptics.success();
-              alert('팟에 참여했습니다! 🎉');
-              setSelectedPodId(null);
-              fetchPods();
             }}
             isHost={selectedPod.hostId === user?.id}
             user={user}
