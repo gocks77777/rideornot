@@ -153,11 +153,12 @@ export default function Home() {
           }, 500);
           
           // 5초 뒤에도 못 찾으면 interval 종료
-          setTimeout(() => clearInterval(checkNaverMap), 5000);
-        },
-        (err) => {
-          console.warn('Geolocation error:', err);
-        }
+              setTimeout(() => clearInterval(checkNaverMap), 5000);
+            },
+            (err) => {
+              console.warn("Geolocation error:", err);
+              setCurrentLocationName("어딘가"); // 위치 정보 실패 시 기본값 설정
+            }
       );
     }
 
@@ -456,6 +457,7 @@ export default function Home() {
               await supabase.from('parties').update({
                 current_member: party.current_member + 1
               }).eq('id', selectedPod.id);
+              fetchPods(); // 팟 참여 후 목록 새로고침
             }}
             isHost={selectedPod.hostId === user?.id}
             user={user}

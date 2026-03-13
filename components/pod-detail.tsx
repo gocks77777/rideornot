@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { ArrowLeft, MapPin, Users, Clock, MessageCircle, Plus, Check, Send, CreditCard } from 'lucide-react';
+import { ArrowLeft, MapPin, Users, Clock, MessageCircle, Plus, Check, Send, CreditCard, Loader2 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -388,17 +388,17 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
       className="fixed inset-0 bg-white z-50 overflow-y-auto pb-24"
       style={{ maxWidth: '480px', margin: '0 auto' }}
     >
-      <header className="sticky top-0 bg-white z-10 px-6 py-4 flex items-center gap-3 border-b border-gray-100">
+      <header className="sticky top-0 bg-white z-10 px-6 py-4 flex items-center gap-3 border-b border-gray-100" style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <button
           onClick={() => { haptics.light(); onBack(); }}
-          className="w-10 h-10 rounded-full bg-[#F2F4F6] flex items-center justify-center active:scale-95 transition-transform"
+          className="w-10 h-10 rounded-full bg-[#F2F4F6] flex items-center justify-center active:scale-95 transition-transform mt-[max(10px,env(safe-area-inset-top))]"
         >
           <ArrowLeft className="w-5 h-5 text-gray-700" />
         </button>
         <h1 className="text-xl font-bold text-[#191F28]">팟 상세</h1>
       </header>
 
-      <div className="px-6 py-6 space-y-6">
+      <div className="px-6 py-6 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 120px)' }}>
         {/* Interactive Map */}
         {hasCoords ? (
           <div ref={mapRef} className="rounded-3xl overflow-hidden h-48 bg-gray-100" />
@@ -585,6 +585,76 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
                 disabled={!commentInput.trim() || isSendingComment}
               >
                 <Send className="w-4 h-4" />
+              </Button>
+            </div>
+          ) : (
+            <p className="text-center text-sm text-gray-400">로그인하면 댓글을 남길 수 있습니다</p>
+          )}
+        </div>
+
+        {/* Host Bank Account */}
+        {pod.hostBankAccount && (
+          <div className="bg-[#F2F4F6] rounded-3xl p-6">
+            <div className="flex items-center gap-2 mb-3">
+              <CreditCard className="w-5 h-5 text-gray-600" />
+              <h2 className="text-sm font-semibold text-gray-600">방장 계좌</h2>
+            </div>
+            <div className="bg-white rounded-2xl p-4">
+              <p className="font-semibold text-[#191F28]">{pod.hostName}</p>
+              <p className="text-[#3182F6] font-mono text-lg mt-1">{pod.hostBankAccount}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Comments */}
+        <div className="bg-[#F2F4F6] rounded-3xl p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <MessageCircle className="w-5 h-5 text-gray-600" />
+            <h2 className="text-sm font-semibold text-gray-600">댓글 {comments.length > 0 && `(${comments.length})`}</h2>
+          </div>
+          <div className="space-y-3 mb-4 max-h-64 overflow-y-auto">
+            {comments.length === 0 ? (
+              <div className="text-center py-6">
+                <p className="text-sm text-gray-400">아직 댓글이 없습니다</p>
+                <p className="text-xs text-gray-300 mt-1">첫 번째 댓글을 남겨보세요!</p>
+              </div>
+            ) : (
+              comments.map((msg) => (
+                <div key={msg.id} className="bg-white rounded-2xl p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      {msg.userAvatar ? (
+                        <img src={msg.userAvatar} alt={msg.userName} className="w-6 h-6 rounded-full" />
+                      ) : (
+                        <div className="w-6 h-6 rounded-full bg-[#3182F6] flex items-center justify-center text-white text-xs font-bold">
+                          {msg.userName.charAt(0)}
+                        </div>
+                      )}
+                      <span className="font-semibold text-sm text-[#191F28]">{msg.userName}</span>
+                    </div>
+                    <span className="text-xs text-gray-500">{msg.createdAt}</span>
+                  </div>
+                  <p className="text-gray-700 text-sm">{msg.message}</p>
+                </div>
+              ))
+            )}
+            <div ref={commentsEndRef} />
+          </div>
+          {user ? (
+            <div className="flex gap-2">
+              <Input
+                value={commentInput}
+                onChange={(e) => setCommentInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSendComment()}
+                placeholder="댓글을 입력하세요..."
+                className="flex-1 rounded-full bg-white border-0 px-4"
+              />
+              <Button
+                className="rounded-full bg-[#3182F6] text-white px-4 min-w-[48px]"
+                onClick={handleSendComment}
+                disabled={!commentInput.trim() || isSendingComment}
+              >
+                {isSendingComment ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="w-4 h-4" />}
               </Button>
             </div>
           ) : (
