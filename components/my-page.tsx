@@ -57,7 +57,7 @@ export function MyPage({ user }: { user?: any }) {
             departureTime: new Date(p.departure_time).toLocaleString('ko-KR', {
               month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
             }),
-            status: (p.status === 'recruiting' ? 'upcoming' : 'completed') as "upcoming" | "completed" | "cancelled"
+            status: p.status as "upcoming" | "completed" | "cancelled" // DB 상태를 그대로 사용
           })));
         }
       });
@@ -79,7 +79,7 @@ export function MyPage({ user }: { user?: any }) {
               departureTime: new Date(p.departure_time).toLocaleString('ko-KR', {
                 month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
               }),
-              status: (p.status === 'recruiting' ? 'upcoming' : 'completed') as "upcoming" | "completed" | "cancelled"
+              status: p.status as "upcoming" | "completed" | "cancelled" // DB 상태를 그대로 사용
             }));
           setJoinedPods(joined);
         }
@@ -403,16 +403,18 @@ export function MyPage({ user }: { user?: any }) {
                 className="bg-white rounded-2xl p-4 cursor-pointer"
               >
                 <div className="flex items-start justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-[#191F28]">{pod.departure}</span>
-                    <ArrowRight className="w-4 h-4 text-gray-400" />
-                    <span className="font-bold text-[#191F28]">{pod.destination}</span>
+                  <div className="flex flex-col min-w-0 pr-2">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span className="font-bold text-[#191F28] text-base truncate">{pod.departure}</span>
+                      <ArrowRight className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                      <span className="font-bold text-[#191F28] text-base truncate">{pod.destination}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-gray-600">
+                      <Clock className="w-3.5 h-3.5 flex-shrink-0" />
+                      <span className="text-sm truncate">{pod.departureTime}</span>
+                    </div>
                   </div>
                   {getStatusBadge(pod.status)}
-                </div>
-                <div className="flex items-center gap-2 text-gray-600">
-                  <Clock className="w-3.5 h-3.5" />
-                  <span className="text-sm">{pod.departureTime}</span>
                 </div>
               </motion.div>
             ))}
@@ -436,16 +438,18 @@ export function MyPage({ user }: { user?: any }) {
                 className="bg-white rounded-2xl p-4 cursor-pointer"
               >
                 <div className="flex items-start justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-[#191F28]">{pod.departure}</span>
-                    <ArrowRight className="w-4 h-4 text-gray-400" />
-                    <span className="font-bold text-[#191F28]">{pod.destination}</span>
+                  <div className="flex flex-col min-w-0 pr-2">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span className="font-bold text-[#191F28] text-base truncate">{pod.departure}</span>
+                      <ArrowRight className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                      <span className="font-bold text-[#191F28] text-base truncate">{pod.destination}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-gray-600">
+                      <Clock className="w-3.5 h-3.5 flex-shrink-0" />
+                      <span className="text-sm truncate">{pod.departureTime}</span>
+                    </div>
                   </div>
                   {getStatusBadge(pod.status)}
-                </div>
-                <div className="flex items-center gap-2 text-gray-600">
-                  <Clock className="w-3.5 h-3.5" />
-                  <span className="text-sm">{pod.departureTime}</span>
                 </div>
               </motion.div>
             ))}
