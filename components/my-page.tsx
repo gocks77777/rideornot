@@ -5,8 +5,15 @@ import { Settings, QrCode, Upload, Clock, Users, ArrowRight, LogOut, LogIn, Cred
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { AnimatePresence } from 'framer-motion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { haptics } from '@/lib/haptics';
+
+interface Participant {
+  id: string;
+  name: string;
+  avatar?: string;
+}
 
 interface Pod {
   id: string;
@@ -14,9 +21,58 @@ interface Pod {
   destination: string;
   departureTime: string;
   status: 'completed' | 'upcoming' | 'cancelled';
+  participants?: Participant[];
 }
 
 import { supabase } from '@/lib/supabase';
+
+// 참여자 목록을 보여주는 새로운 모달 컴포넌트
+interface ParticipantsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  participants: Participant[];
+}
+
+function ParticipantsModal({ isOpen, onClose, participants }: ParticipantsModalProps) {
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={onClose}
+          className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-6"
+        >
+          <motion.div
+            initial={{ y: 50, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 50, opacity: 0 }}
+            className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-xl"
+            onClick={(e) => e.stopPropagation()} // 클릭 이벤트 전파 방지
+          >
+            <h3 className="text-xl font-bold text-[#191F28] mb-4">참여자 목록</h3>
+            <div className="space-y-3 max-h-60 overflow-y-auto">
+              {participants.map((p) => (
+                <div key={p.id} className="flex items-center gap-3 bg-[#F2F4F6] rounded-xl p-3">
+                  {p.avatar ? (
+                    <img src={p.avatar} alt={p.name} className="w-10 h-10 rounded-full object-cover" />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-[#3182F6] flex items-center justify-center text-white font-bold">
+                      {p.name.charAt(0)}
+                    </div>
+                  )}
+                  <span className="font-semibold text-[#191F28]">{p.name}</span>
+                </div>
+              ))}
+            </div>
+            <Button onClick={onClose} className="w-full mt-6 bg-[#3182F6] text-white rounded-xl">닫기</Button>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
 
 export function MyPage({ user }: { user?: any }) {
   const [mannerTemp, setMannerTemp] = useState(36.5);
@@ -25,6 +81,8 @@ export function MyPage({ user }: { user?: any }) {
   const [hostingPods, setHostingPods] = useState<Pod[]>([]);
   const [joinedPods, setJoinedPods] = useState<Pod[]>([]);
   const [isPushEnabled, setIsPushEnabled] = useState(false);
+  const [showParticipantsModal, setShowParticipantsModal] = useState(false);
+  const [selectedPodParticipants, setSelectedPodParticipants] = useState<Participant[]>([]);
 
   useEffect(() => {
     if (!user) return;
@@ -44,29 +102,41 @@ export function MyPage({ user }: { user?: any }) {
 
     // Fetch pods I am hosting
     supabase
-      .from('parties')
-      .select('*')
-      .eq('host_id', user.id)
-      .order('departure_time', { ascending: false })
+      .from("parties")
+      .select(`
+        *,
+        party_members(user_id, user:users(nickname, avatar_url))
+      `)
+      .eq("host_id", user.id)
+      .order("departure_time", { ascending: false })
       .then(({ data }) => {
         if (data) {
           setHostingPods(data.map(p => ({
             id: p.id,
             departure: p.start_point,
             destination: p.end_point,
-            departureTime: new Date(p.departure_time).toLocaleString('ko-KR', {
-              month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+            departureTime: new Date(p.departure_time).toLocaleString("ko-KR", {
+              month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
             }),
-            status: p.status as "upcoming" | "completed" | "cancelled" // DB 상태를 그대로 사용
+            status: p.status as "upcoming" | "completed" | "cancelled",
+            participants: p.party_members?.map((m: any) => ({
+              id: m.user_id,
+              name: m.user?.nickname || "멤버",
+              avatar: m.user?.avatar_url || ""
+            })) || []
           })));
         }
       });
 
     // Fetch pods I joined (where I am a member but not the host)
     supabase
-      .from('party_members')
-      .select('parties(*)')
-      .eq('user_id', user.id)
+      .from("party_members")
+      .select(`
+        parties(*,
+          party_members(user_id, user:users(nickname, avatar_url))
+        )
+      `)
+      .eq("user_id", user.id)
       .then(({ data }) => {
         if (data) {
           const joined = data
@@ -76,10 +146,15 @@ export function MyPage({ user }: { user?: any }) {
               id: p.id,
               departure: p.start_point,
               destination: p.end_point,
-              departureTime: new Date(p.departure_time).toLocaleString('ko-KR', {
-                month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+              departureTime: new Date(p.departure_time).toLocaleString("ko-KR", {
+                month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
               }),
-              status: p.status as "upcoming" | "completed" | "cancelled" // DB 상태를 그대로 사용
+              status: p.status as "upcoming" | "completed" | "cancelled",
+              participants: p.party_members?.map((m: any) => ({
+                id: m.user_id,
+                name: m.user?.nickname || "멤버",
+                avatar: m.user?.avatar_url || ""
+              })) || []
             }));
           setJoinedPods(joined);
         }
@@ -399,7 +474,13 @@ export function MyPage({ user }: { user?: any }) {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.05 }}
                 whileTap={{ scale: 0.98 }}
-                onClick={() => haptics.light()}
+                onClick={() => {
+                  haptics.light();
+                  if (pod.participants && pod.participants.length > 0) {
+                    setSelectedPodParticipants(pod.participants);
+                    setShowParticipantsModal(true);
+                  }
+                }}
                 className="bg-white rounded-2xl p-4 cursor-pointer"
               >
                 <div className="flex items-start justify-between mb-2">
@@ -434,7 +515,13 @@ export function MyPage({ user }: { user?: any }) {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.05 }}
                 whileTap={{ scale: 0.98 }}
-                onClick={() => haptics.light()}
+                onClick={() => {
+                  haptics.light();
+                  if (pod.participants && pod.participants.length > 0) {
+                    setSelectedPodParticipants(pod.participants);
+                    setShowParticipantsModal(true);
+                  }
+                }}
                 className="bg-white rounded-2xl p-4 cursor-pointer"
               >
                 <div className="flex items-start justify-between mb-2">
@@ -462,6 +549,12 @@ export function MyPage({ user }: { user?: any }) {
           </TabsContent>
         </Tabs>
       </div>
+
+      <ParticipantsModal
+        isOpen={showParticipantsModal}
+        onClose={() => setShowParticipantsModal(false)}
+        participants={selectedPodParticipants}
+      />
     </div>
   );
 }
