@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, Search, LogIn, LogOut } from 'lucide-react';
+import { Bell, Search, LogIn, LogOut, RefreshCw } from 'lucide-react';
 import { FloatingNav } from '@/components/floating-nav';
 import { LivePodsScroll } from '@/components/live-pods-scroll';
 import { PodList } from '@/components/pod-list';
@@ -305,6 +305,7 @@ export default function Home() {
                       ? `반가워요! 👋\n지금 ${currentLocationName}에서 출발하시나요?`
                       : '반가워요! 👋\n오늘도 택시비 아껴볼까요?'}
                 </h1>
+                <p className="text-xs text-gray-400 mt-2">오전 2시 13분 수정됨.</p>
               </motion.div>
 
               <motion.div
