@@ -1,4 +1,4 @@
-'use client';
+ㄴㄱ'use client';
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -331,7 +331,7 @@ export default function Home() {
               {isLoading ? (
                 <LivePodsSkeleton />
               ) : (
-                <LivePodsScroll pods={livePods} onPodClick={setSelectedPodId} />
+                <LivePodsScroll pods={livePods} onPodClick={setSelectedPodId} onRefresh={fetchPods} />
               )}
             </motion.div>
           )}

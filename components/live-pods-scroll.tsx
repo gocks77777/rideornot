@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Users, Clock, ArrowRight } from 'lucide-react';
+import { Users, Clock, ArrowRight, RefreshCw } from 'lucide-react'; // RefreshCw 아이콘 추가
 import { haptics } from '@/lib/haptics';
 import { shortenAddress } from '@/components/map-selector';
 
@@ -17,12 +17,24 @@ interface Pod {
 interface LivePodsScrollProps {
   pods: Pod[];
   onPodClick?: (podId: string) => void;
+  onRefresh?: () => void; // 새로고침 함수 추가
 }
 
-export function LivePodsScroll({ pods, onPodClick }: LivePodsScrollProps) {
+export function LivePodsScroll({ pods, onPodClick, onRefresh }: LivePodsScrollProps) {
   return (
     <div className="w-full overflow-hidden">
-      <h3 className="text-sm font-semibold text-gray-600 mb-3 px-6">실시간 팟</h3>
+      <div className="flex items-center justify-between mb-3 px-6">
+        <h3 className="text-sm font-semibold text-gray-600">실시간 팟</h3>
+        {onRefresh && (
+          <button 
+            onClick={onRefresh} 
+            className="flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-gray-700 active:scale-95 transition-transform"
+          >
+            <RefreshCw className="w-3 h-3" />
+            <span>새로고침</span>
+          </button>
+        )}
+      </div>
       <div className="flex gap-3 overflow-x-auto scrollbar-hide snap-x px-6 pb-2">
         {pods.map((pod, index) => (
           <motion.div
