@@ -7,18 +7,25 @@ const publicVapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!;
 const privateVapidKey = process.env.VAPID_PRIVATE_KEY!;
 
 // 이메일은 푸시 서비스 제공자(구글/애플 등)가 연락할 수 있는 용도로 사용됨
-webpush.setVapidDetails(
-  'mailto:your-email@example.com',
-  publicVapidKey,
-  privateVapidKey
-);
+if (publicVapidKey && privateVapidKey) {
+  webpush.setVapidDetails(
+    'mailto:your-email@example.com',
+    publicVapidKey,
+    privateVapidKey
+  );
+} else {
+  console.warn('VAPID keys are missing. Push notifications will not work.');
+}
 
 // 관리자 권한이 있는 Supabase 클라이언트 (서비스 롤 키 필요)
 // 사용자의 구독 정보를 읽어오기 위해 사용합니다.
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY! // anon_key 대신 service_role_key 사용
-);
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+
+// 빌드 시점 등 환경 변수가 없는 경우를 대비하여 조건부 생성
+const supabaseAdmin = supabaseUrl && supabaseServiceKey 
+  ? createClient(supabaseUrl, supabaseServiceKey) 
+  : null;
 
 export async function POST(req: Request) {
   try {
@@ -26,6 +33,11 @@ export async function POST(req: Request) {
 
     if (!userId || !title) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
+    if (!supabaseAdmin) {
+      console.warn('Supabase admin client not initialized. Push skipped.');
+      return NextResponse.json({ error: 'Supabase config missing' }, { status: 500 });
     }
 
     // 1. 해당 유저의 푸시 구독 정보(Endpoint 등)를 DB에서 가져옵니다.
@@ -65,7 +77,7 @@ export async function POST(req: Request) {
       } catch (err: any) {
         console.error('Error sending push to endpoint', sub.endpoint, err);
         // 구독이 만료되었거나 취소된 경우(HTTP 410, 404), DB에서 삭제 처리
-        if (err.statusCode === 404 || err.statusCode === 410) {
+        if ((err.statusCode === 404 || err.statusCode === 410) && supabaseAdmin) {
           await supabaseAdmin.from('push_subscriptions').delete().eq('id', sub.id);
         }
       }
