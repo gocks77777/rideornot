@@ -195,10 +195,12 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
             new naver.maps.Polyline({
               map: map,
               path: [startPos, endPos],
-              strokeColor: '#3182F6',
-              strokeWeight: 3,
-              strokeOpacity: 0.6,
-              strokeStyle: 'shortdash'
+              strokeColor: '#1E5BBF',
+              strokeWeight: 4,
+              strokeOpacity: 0.8,
+              strokeStyle: 'shortdash',
+              strokeLineCap: 'round',
+              strokeLineJoin: 'round',
             });
           }
         } catch {
@@ -206,10 +208,12 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
           new naver.maps.Polyline({
             map: map,
             path: [startPos, endPos],
-            strokeColor: '#3182F6',
-            strokeWeight: 3,
-            strokeOpacity: 0.6,
-            strokeStyle: 'shortdash'
+            strokeColor: '#1E5BBF',
+            strokeWeight: 4,
+            strokeOpacity: 0.8,
+            strokeStyle: 'shortdash',
+            strokeLineCap: 'round',
+            strokeLineJoin: 'round',
           });
         }
 
