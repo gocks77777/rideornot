@@ -167,26 +167,58 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
               strokeLineJoin: 'round',
             });
 
-            // 메인 경로 라인 (카카오T/네이버 지도 네비게이션 스타일 쨍한 파란색 + 화살표 패턴)
+            // 메인 경로 라인 (솔리드 라인)
             new naver.maps.Polyline({
               map: map,
               path: routePath,
               strokeColor: '#3182F6',
-              strokeWeight: 6, // 두께 증가
+              strokeWeight: 6,
               strokeOpacity: 1,
               strokeLineCap: 'round',
               strokeLineJoin: 'round',
-              // 화살표 패턴 아이콘 추가 (방향성 표시)
-              icons: [{
-                sprite: 'icons',
-                icon: 'navigation', // 네이버 지도 내부 제공 아이콘 스프라이트에서 방향 아이콘 사용 시도
-                offset: '100%' // 끝에 배치하거나 간격을 둘 수 있음. API 문서 확인 필요.
-              }]
             });
+
+            // 네이버 지도 JS API v3에서는 Polyline에 화살표 패턴을 그리는 
+            // 완벽한 내장 옵션이 부족합니다. 따라서, 경로를 따라 일정 간격마다
+            // 화살표 모양의 마커나 심볼을 덮어 씌우는 방식(Custom Overlay)으로 구현합니다.
+
+            // 화살표 아이콘 모양 (SVG)
+            const arrowSvg = `
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 2L22 22L12 18L2 22L12 2Z" fill="white" stroke="#1E5BBF" stroke-width="1.5" stroke-linejoin="round"/>
+              </svg>
+            `;
+
+            // 경로의 총 좌표 수에 따라 적당한 간격으로 화살표 그리기
+            // 배열 인덱스 기반으로 듬성듬성 화살표 배치
+            const arrowInterval = Math.max(Math.floor(routePath.length / 10), 5); // 최소 5개의 점 간격으로 화살표
             
-            // 만약 icons 속성이 기대대로 화살표를 그리지 않는다면, strokeStyle을 이용해 방향성을 조금 줄 수 있습니다.
-            // 네이버 지도 JS API v3의 Polyline에는 카카오 내비처럼 완벽한 패턴 화살표를 넣는 기본 옵션이 제한적일 수 있습니다.
-            // 대안: CustomOverlay를 중간중간 배치하거나, 둥근 점선 스타일을 활용.
+            for (let i = 1; i < routePath.length - 1; i += arrowInterval) {
+              const current = routePath[i];
+              const next = routePath[i + 1];
+              
+              if (!next) continue;
+
+              // 두 좌표 사이의 각도(heading) 계산
+              const y1 = current.lat();
+              const x1 = current.lng();
+              const y2 = next.lat();
+              const x2 = next.lng();
+              
+              // 각도 계산 (라디안을 디그리로 변환)
+              const angle = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
+              // SVG를 회전시켜 화살표가 가리키는 방향을 맞춤
+              const rotation = -angle + 90; 
+
+              new naver.maps.Marker({
+                position: current,
+                map: map,
+                icon: {
+                  content: `<div style="transform: translate(-50%, -50%) rotate(${rotation}deg);">${arrowSvg}</div>`,
+                  anchor: new naver.maps.Point(6, 6)
+                }
+              });
+            }
             
             // Re-fit bounds to include the route with some padding
             const routeBounds = new naver.maps.LatLngBounds();
