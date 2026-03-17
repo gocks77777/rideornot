@@ -150,6 +150,8 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
           );
           const data = await res.json();
 
+          console.log('[Directions API response]', data);
+
           if (data.path && data.path.length > 0) {
             // Draw real road route with gradient-like or solid bold style
             const routePath = data.path.map(
@@ -245,7 +247,8 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
               strokeLineJoin: 'round',
             });
           }
-        } catch {
+        } catch (dirErr) {
+          console.error('[Directions API fetch error]', dirErr);
           // Fallback: dashed line on error
           new naver.maps.Polyline({
             map: map,

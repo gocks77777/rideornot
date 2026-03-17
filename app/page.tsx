@@ -35,6 +35,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState('home');
   const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false);
   const [searchSheetOpen, setSearchSheetOpen] = useState(false);
+  const [searchFocus, setSearchFocus] = useState<'departure' | 'destination' | null>(null);
   const [pushGuideOpen, setPushGuideOpen] = useState(false);
   const [selectedPodId, setSelectedPodId] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
@@ -314,19 +315,33 @@ export default function Home() {
                 transition={{ delay: 0.1 }}
                 className="px-6 mb-8"
               >
-                <motion.button
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => {
-                    haptics.light();
-                    setSearchSheetOpen(!searchSheetOpen);
-                  }}
-                  className="w-full bg-[#F2F4F6] rounded-3xl p-6 shadow-lg flex items-center gap-4 active:shadow-md transition-shadow"
-                >
-                  <div className="w-12 h-12 rounded-full bg-[#3182F6] flex items-center justify-center">
-                    <Search className="w-6 h-6 text-white" />
+                <div className="w-full bg-white rounded-3xl p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 flex flex-col relative">
+                  <div className="absolute left-[34px] top-[46px] bottom-[46px] w-[2px] border-dashed border-l-2 border-gray-200"></div>
+                  
+                  <div 
+                    onClick={() => {
+                        haptics.light();
+                        setSearchFocus('departure');
+                        setSearchSheetOpen(true);
+                    }}
+                    className="flex items-center gap-4 bg-[#F2F4F6] p-4 rounded-2xl mb-3 cursor-pointer active:bg-gray-200 transition-colors"
+                  >
+                    <div className="w-3 h-3 rounded-full bg-[#3182F6]" />
+                    <span className="text-[#8B95A1] font-medium text-lg">출발지를 검색하세요</span>
                   </div>
-                  <span className="text-lg font-semibold text-gray-600">어디로 가시나요?</span>
-                </motion.button>
+
+                  <div 
+                    onClick={() => {
+                        haptics.light();
+                        setSearchFocus('destination');
+                        setSearchSheetOpen(true);
+                    }}
+                    className="flex items-center gap-4 bg-[#F2F4F6] p-4 rounded-2xl cursor-pointer active:bg-gray-200 transition-colors"
+                  >
+                    <div className="w-3 h-3 rounded-full bg-[#FF5050]" />
+                    <span className="text-[#8B95A1] font-medium text-lg">도착지를 검색하세요</span>
+                  </div>
+                </div>
               </motion.div>
 
               {isLoading ? (
@@ -472,6 +487,7 @@ export default function Home() {
           onPodClick={setSelectedPodId}
           allPods={allPods}
           user={user}
+          initialFocus={searchFocus}
         />
 
         <PushGuideSheet

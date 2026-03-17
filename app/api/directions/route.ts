@@ -26,7 +26,7 @@ export async function GET(request: Request) {
     const start = `${startLng},${startLat}`;
     const goal = `${endLng},${endLat}`;
 
-    const url = `https://naveropenapi.apigw.ntruss.com/map-direction/v1/driving?start=${start}&goal=${goal}`;
+    const url = `https://naveropenapi.apigw.ntruss.com/map-direction-15/v1/driving?start=${start}&goal=${goal}`;
 
     console.log('Directions API request:', url);
     console.log('Using key ID:', clientId);
@@ -49,8 +49,8 @@ export async function GET(request: Request) {
 
     const data = await response.json();
 
-    if (data.code === 0 && data.route?.trafast?.[0]) {
-      const route = data.route.trafast[0];
+    if (data.code === 0 && data.route?.traoptimal?.[0]) {
+      const route = data.route.traoptimal[0];
       const path = route.path; // Array of [lng, lat]
       const summary = route.summary;
 

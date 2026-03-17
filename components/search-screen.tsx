@@ -2,7 +2,7 @@
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Search, MapPin, Clock, Users, Package } from 'lucide-react';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { haptics } from '@/lib/haptics';
@@ -29,6 +29,7 @@ interface SearchScreenProps {
   onPodClick: (podId: string) => void;
   allPods: Pod[];
   user?: any;
+  initialFocus?: 'departure' | 'destination' | null;
 }
 
 function getDistKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -39,50 +40,94 @@ function getDistKm(lat1: number, lng1: number, lat2: number, lng2: number): numb
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-export function SearchScreen({ isOpen, onClose, onCreatePod, onPodClick, allPods, user }: SearchScreenProps) {
-  const [searchQuery, setSearchQuery] = useState('');
+export function SearchScreen({ isOpen, onClose, onCreatePod, onPodClick, allPods, user, initialFocus }: SearchScreenProps) {
+  const [depQuery, setDepQuery] = useState('');
+  const [destQuery, setDestQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Pod[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const depInputRef = useRef<HTMLInputElement>(null);
 
-  const handleSearch = useCallback(async (query: string) => {
-    setSearchQuery(query);
-    if (!query.trim()) { setSearchResults([]); return; }
-
-    // 1) Text-based match
-    const textResults = allPods.filter(
-      pod =>
-        pod.departure?.toLowerCase().includes(query.toLowerCase()) ||
-        pod.destination?.toLowerCase().includes(query.toLowerCase())
-    );
-
-    // 2) Coordinate-based: geocode the query, find nearby pods
-    setIsSearching(true);
-    try {
-      const res = await fetch(`/api/geocode?query=${encodeURIComponent(query)}`);
-      const data = await res.json();
-
-      if (data.results?.length > 0) {
-        const { lat, lng } = data.results[0];
-        // Find pods within 5km of this location (check both start and end)
-        const nearbyPods = allPods.filter(pod => {
-          if (textResults.some(tr => tr.id === pod.id)) return false; // skip already matched
-          if (pod.startLat && pod.startLng) {
-            if (getDistKm(lat, lng, pod.startLat, pod.startLng) < 5) return true;
-          }
-          if (pod.endLat && pod.endLng) {
-            if (getDistKm(lat, lng, pod.endLat, pod.endLng) < 5) return true;
-          }
-          return false;
-        });
-        setSearchResults([...textResults, ...nearbyPods]);
-      } else {
-        setSearchResults(textResults);
-      }
-    } catch {
-      setSearchResults(textResults);
+  const handleSearch = useCallback(async (dep: string, dest: string) => {
+    if (!dep.trim() && !dest.trim()) { 
+      setSearchResults([]); 
+      return; 
     }
+
+    setIsSearching(true);
+
+    let depMatched: Pod[] | null = null;
+    let destMatched: Pod[] | null = null;
+
+    // 1) Departures
+    if (dep.trim()) {
+      const q = dep.toLowerCase();
+      const textResults = allPods.filter(pod => pod.departure?.toLowerCase().includes(q));
+      try {
+        const res = await fetch(`/api/geocode?query=${encodeURIComponent(dep)}`);
+        const data = await res.json();
+        if (data.results?.length > 0) {
+          const { lat, lng } = data.results[0];
+          const nearbyPods = allPods.filter(pod => {
+            if (textResults.some(tr => tr.id === pod.id)) return false;
+            if (pod.startLat && pod.startLng) {
+              return getDistKm(lat, lng, pod.startLat, pod.startLng) < 5;
+            }
+            return false;
+          });
+          depMatched = [...textResults, ...nearbyPods];
+        } else {
+          depMatched = textResults;
+        }
+      } catch {
+        depMatched = textResults;
+      }
+    }
+
+    // 2) Destinations
+    if (dest.trim()) {
+      const q = dest.toLowerCase();
+      const textResults = allPods.filter(pod => pod.destination?.toLowerCase().includes(q));
+      try {
+        const res = await fetch(`/api/geocode?query=${encodeURIComponent(dest)}`);
+        const data = await res.json();
+        if (data.results?.length > 0) {
+          const { lat, lng } = data.results[0];
+          const nearbyPods = allPods.filter(pod => {
+            if (textResults.some(tr => tr.id === pod.id)) return false;
+            if (pod.endLat && pod.endLng) {
+              return getDistKm(lat, lng, pod.endLat, pod.endLng) < 5;
+            }
+            return false;
+          });
+          destMatched = [...textResults, ...nearbyPods];
+        } else {
+          destMatched = textResults;
+        }
+      } catch {
+        destMatched = textResults;
+      }
+    }
+
+    if (depMatched && destMatched) {
+      const _destMatched = destMatched;
+      setSearchResults(depMatched.filter(d => _destMatched.some(ds => ds.id === d.id)));
+    } else if (depMatched) {
+      setSearchResults(depMatched);
+    } else if (destMatched) {
+      setSearchResults(destMatched);
+    } else {
+      setSearchResults([]);
+    }
+    
     setIsSearching(false);
   }, [allPods]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      handleSearch(depQuery, destQuery);
+    }, 500); // 500ms debounce
+    return () => clearTimeout(timer);
+  }, [depQuery, destQuery, handleSearch]);
 
   const handleCreateFromSearch = () => {
     haptics.medium();
@@ -120,20 +165,33 @@ export function SearchScreen({ isOpen, onClose, onCreatePod, onPodClick, allPods
               <h1 className="text-xl font-bold text-[#191F28]">팟 검색</h1>
             </div>
 
-            <div className="relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <Input
-                value={searchQuery}
-                onChange={(e) => handleSearch(e.target.value)}
-                placeholder="출발지 또는 도착지를 검색하세요"
-                className="h-14 rounded-2xl bg-[#F2F4F6] border-0 pl-12 pr-4 text-base"
-                autoFocus
-              />
+            <div className="flex flex-col gap-3 relative">
+              <div className="absolute left-[24px] top-[40px] bottom-[30px] border-l-2 border-dashed border-gray-200" style={{ opacity: 0.5 }}></div>
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <Input
+                  value={depQuery}
+                  onChange={(e) => setDepQuery(e.target.value)}
+                  placeholder="출발지를 검색하세요"
+                  className="h-14 rounded-2xl bg-[#F2F4F6] border-0 pl-12 pr-4 text-base focus-visible:ring-[#3182F6]"
+                  autoFocus={initialFocus === 'departure' || !initialFocus}
+                />
+              </div>
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <Input
+                  value={destQuery}
+                  onChange={(e) => setDestQuery(e.target.value)}
+                  placeholder="도착지를 검색하세요"
+                  className="h-14 rounded-2xl bg-[#F2F4F6] border-0 pl-12 pr-4 text-base focus-visible:ring-[#3182F6]"
+                  autoFocus={initialFocus === 'destination'}
+                />
+              </div>
             </div>
           </header>
 
           <div className="px-6 py-6">
-            {searchQuery && searchResults.length > 0 && (
+            {(depQuery || destQuery) && searchResults.length > 0 && (
               <div className="space-y-3">
                 <p className="text-sm text-gray-600 mb-3">
                   {searchResults.length}개의 팟을 찾았습니다
@@ -177,7 +235,7 @@ export function SearchScreen({ isOpen, onClose, onCreatePod, onPodClick, allPods
               </div>
             )}
 
-            {searchQuery && searchResults.length === 0 && (
+            {(depQuery || destQuery) && searchResults.length === 0 && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -187,10 +245,10 @@ export function SearchScreen({ isOpen, onClose, onCreatePod, onPodClick, allPods
                   <Package className="w-12 h-12 text-gray-300" />
                 </div>
                 <h3 className="text-xl font-bold text-[#191F28] mb-2">
-                  검색 결과가 없습니다
+                  찾으시는 팟이 없네요
                 </h3>
                 <p className="text-gray-600 mb-6">
-                  &quot;{searchQuery}&quot;에 해당하는 팟을 찾을 수 없어요
+                  직접 이 경로로 팟을 만들어볼까요?
                 </p>
                 <Button
                   onClick={handleCreateFromSearch}
@@ -201,7 +259,7 @@ export function SearchScreen({ isOpen, onClose, onCreatePod, onPodClick, allPods
               </motion.div>
             )}
 
-            {!searchQuery && (
+            {!(depQuery || destQuery) && (
               <div className="text-center py-16">
                 <Search className="w-16 h-16 text-gray-200 mx-auto mb-4" />
                 <p className="text-gray-500">출발지나 도착지를 검색해보세요</p>
