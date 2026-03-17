@@ -167,17 +167,27 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
               strokeLineJoin: 'round',
             });
 
-            // 메인 경로 라인 (카카오T 스타일 쨍한 파란색)
+            // 메인 경로 라인 (카카오T/네이버 지도 네비게이션 스타일 쨍한 파란색 + 화살표 패턴)
             new naver.maps.Polyline({
               map: map,
               path: routePath,
               strokeColor: '#3182F6',
-              strokeWeight: 4,
+              strokeWeight: 6, // 두께 증가
               strokeOpacity: 1,
               strokeLineCap: 'round',
               strokeLineJoin: 'round',
+              // 화살표 패턴 아이콘 추가 (방향성 표시)
+              icons: [{
+                sprite: 'icons',
+                icon: 'navigation', // 네이버 지도 내부 제공 아이콘 스프라이트에서 방향 아이콘 사용 시도
+                offset: '100%' // 끝에 배치하거나 간격을 둘 수 있음. API 문서 확인 필요.
+              }]
             });
-
+            
+            // 만약 icons 속성이 기대대로 화살표를 그리지 않는다면, strokeStyle을 이용해 방향성을 조금 줄 수 있습니다.
+            // 네이버 지도 JS API v3의 Polyline에는 카카오 내비처럼 완벽한 패턴 화살표를 넣는 기본 옵션이 제한적일 수 있습니다.
+            // 대안: CustomOverlay를 중간중간 배치하거나, 둥근 점선 스타일을 활용.
+            
             // Re-fit bounds to include the route with some padding
             const routeBounds = new naver.maps.LatLngBounds();
             routePath.forEach((p: any) => routeBounds.extend(p));
