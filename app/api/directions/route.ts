@@ -26,10 +26,11 @@ export async function GET(request: Request) {
     const start = `${startLng},${startLat}`;
     const goal = `${endLng},${endLat}`;
 
-    const url = `https://naveropenapi.apigw.ntruss.com/map-direction-15/v1/driving?start=${start}&goal=${goal}`;
+    const url = `https://naveropenapi.apigw.ntruss.com/map-direction/v1/driving?start=${start}&goal=${goal}`;
 
     console.log('Directions API request:', url);
-    console.log('Using key ID:', clientId);
+    console.log('Client ID exists:', !!clientId, '/ length:', clientId?.length);
+    console.log('Client Secret exists:', !!clientSecret, '/ length:', clientSecret?.length);
 
     const response = await fetch(url, {
       headers: {
