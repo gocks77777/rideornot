@@ -411,7 +411,7 @@ export default function Home() {
             onBack={() => setSelectedPodId(null)}
             onJoin={async () => {
               if (!user) { alert('로그인이 필요합니다.'); return; }
-              
+
               // 성별 필터 체크
               if (selectedPod.genderFilter !== 'any') {
                 if (!userGender) {
@@ -424,7 +424,7 @@ export default function Home() {
                 }
               }
 
-              // Atomic join: check current_member < max_member
+              // 자리 확인
               const { data: party } = await supabase
                 .from('parties')
                 .select('current_member, max_member')
@@ -434,46 +434,38 @@ export default function Home() {
                 alert('이미 자리가 다 찼습니다!');
                 return;
               }
-              // Check not already joined
+
+              // 중복 참여 확인
               const { data: existing } = await supabase
                 .from('party_members')
                 .select('user_id')
                 .eq('party_id', selectedPod.id)
                 .eq('user_id', user.id)
-                .single();
+                .maybeSingle();
               if (existing) {
                 alert('이미 참여한 팟입니다.');
                 return;
               }
-              
-              // Optimistic UI Update (즉각적인 화면 반영)
-              setAllPods(prev => prev.map(p => 
-                p.id === selectedPod.id 
-                  ? { 
-                      ...p, 
-                      currentMembers: p.currentMembers + 1,
-                      participants: [...p.participants, { id: user.id, name: user.user_metadata?.nickname || '멤버', avatar: user.user_metadata?.avatar_url || '' }]
-                    }
-                  : p
-              ));
-              setSelectedPodId(null);
-              haptics.success();
-              alert('팟에 참여했습니다! 🎉');
 
+              // DB 저장
               const { error: joinErr } = await supabase.from('party_members').insert({
                 party_id: selectedPod.id,
                 user_id: user.id,
                 status: 'joined'
               });
-              if (joinErr) { 
-                alert('참여 실패: ' + joinErr.message); 
-                fetchPods(); // 실패 시 롤백 (다시 데이터 패치)
-                return; 
+              if (joinErr) {
+                alert('참여 실패: ' + joinErr.message);
+                return;
               }
               await supabase.from('parties').update({
                 current_member: party.current_member + 1
               }).eq('id', selectedPod.id);
-              fetchPods(); // 팟 참여 후 목록 새로고침
+
+              // 성공 처리
+              haptics.success();
+              alert('팟에 참여했습니다! 🎉');
+              setSelectedPodId(null);
+              fetchPods();
             }}
             isHost={selectedPod.hostId === user?.id}
             user={user}

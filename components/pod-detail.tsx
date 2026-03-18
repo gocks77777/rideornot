@@ -53,6 +53,7 @@ interface PodDetailProps {
 export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDetailProps) {
   const emptySlots = pod.maxMembers - pod.participants.length;
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [isJoining, setIsJoining] = useState(false);
   const [participantsPaidStatus, setParticipantsPaidStatus] = useState<Record<string, boolean>>(
     pod.participants.reduce((acc, p) => ({ ...acc, [p.id]: p.paid || false }), {})
   );
@@ -639,8 +640,9 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
           <Button
             className="w-full bg-[#3182F6] text-white rounded-full py-6 text-lg font-bold shadow-lg hover:bg-[#2968C8]"
             onClick={handleJoinClick}
+            disabled={isJoining}
           >
-            참여하기
+            {isJoining ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : '참여하기'}
           </Button>
         </div>
       )}
@@ -670,6 +672,7 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
         onConfirmPayment={handlePaymentConfirm}
         amount={costPerPerson}
         hostName={pod.hostName || pod.participants[0]?.name || '방장'}
+        accountNumber={pod.hostBankAccount}
       />
     </motion.div>
   );
