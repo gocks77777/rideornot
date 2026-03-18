@@ -26,7 +26,7 @@ export async function GET(request: Request) {
     const start = `${startLng},${startLat}`;
     const goal = `${endLng},${endLat}`;
 
-    const url = `https://naveropenapi.apigw.ntruss.com/map-direction/v1/driving?start=${start}&goal=${goal}`;
+    const url = `https://maps.apigw.ntruss.com/map-direction/v1/driving?start=${start}&goal=${goal}`;
 
     console.log('Directions API request:', url);
     console.log('Client ID exists:', !!clientId, '/ length:', clientId?.length);
