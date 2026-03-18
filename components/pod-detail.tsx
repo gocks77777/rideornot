@@ -117,13 +117,13 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
           map: map,
           icon: {
             content: `
-              <div style="transform: translate(-50%, -100%); display: flex; flex-direction: column; align-items: center;">
-                <div style="background: #3182F6; color: white; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: bold; white-space: nowrap; box-shadow: 0 2px 8px rgba(49,130,246,0.4);">출발</div>
-                <div style="width: 3px; height: 8px; background: #3182F6; margin-top: -1px;"></div>
-                <div style="width: 10px; height: 4px; background: rgba(0,0,0,0.2); border-radius: 50%;"></div>
+              <div style="display:flex;flex-direction:column;align-items:center;">
+                <div style="background:#3182F6;color:white;padding:4px 10px;border-radius:12px;font-size:11px;font-weight:bold;white-space:nowrap;box-shadow:0 2px 8px rgba(49,130,246,0.4);">출발</div>
+                <div style="width:2px;height:8px;background:#3182F6;"></div>
+                <div style="width:8px;height:8px;background:#3182F6;border-radius:50%;"></div>
               </div>
             `,
-            anchor: new naver.maps.Point(20, 40)
+            anchor: new naver.maps.Point(25, 44)
           }
         });
 
@@ -133,13 +133,13 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
           map: map,
           icon: {
             content: `
-              <div style="transform: translate(-50%, -100%); display: flex; flex-direction: column; align-items: center;">
-                <div style="background: #FFA500; color: white; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: bold; white-space: nowrap; box-shadow: 0 2px 8px rgba(255,165,0,0.4);">도착</div>
-                <div style="width: 3px; height: 8px; background: #FFA500; margin-top: -1px;"></div>
-                <div style="width: 10px; height: 4px; background: rgba(0,0,0,0.2); border-radius: 50%;"></div>
+              <div style="display:flex;flex-direction:column;align-items:center;">
+                <div style="background:#FFA500;color:white;padding:4px 10px;border-radius:12px;font-size:11px;font-weight:bold;white-space:nowrap;box-shadow:0 2px 8px rgba(255,165,0,0.4);">도착</div>
+                <div style="width:2px;height:8px;background:#FFA500;"></div>
+                <div style="width:8px;height:8px;background:#FFA500;border-radius:50%;"></div>
               </div>
             `,
-            anchor: new naver.maps.Point(20, 40)
+            anchor: new naver.maps.Point(25, 44)
           }
         });
 
