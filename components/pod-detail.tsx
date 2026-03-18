@@ -63,6 +63,8 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
   // Real fare from Directions API
   const [realTaxiFare, setRealTaxiFare] = useState<number | null>(null);
   const [routeDuration, setRouteDuration] = useState<number | null>(null);
+  const [routeDistance, setRouteDistance] = useState<number | null>(null);
+  const [mapLoading, setMapLoading] = useState(true);
 
   // Comments state
   const [comments, setComments] = useState<Comment[]>([]);
@@ -111,35 +113,33 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
         const bounds = new naver.maps.LatLngBounds(startPos, endPos);
         map.fitBounds(bounds, { top: 40, right: 40, bottom: 40, left: 40 });
 
-        // Start marker (blue)
+        // Start marker (blue pin)
         new naver.maps.Marker({
           position: startPos,
           map: map,
           icon: {
             content: `
-              <div style="display:flex;flex-direction:column;align-items:center;">
-                <div style="background:#3182F6;color:white;padding:4px 10px;border-radius:12px;font-size:11px;font-weight:bold;white-space:nowrap;box-shadow:0 2px 8px rgba(49,130,246,0.4);">출발</div>
-                <div style="width:2px;height:8px;background:#3182F6;"></div>
-                <div style="width:8px;height:8px;background:#3182F6;border-radius:50%;"></div>
+              <div style="display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 3px 6px rgba(49,130,246,0.45));">
+                <div style="background:#3182F6;color:white;padding:5px 12px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap;">출발</div>
+                <div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #3182F6;margin-top:-1px;"></div>
               </div>
             `,
-            anchor: new naver.maps.Point(25, 44)
+            anchor: new naver.maps.Point(25, 37)
           }
         });
 
-        // End marker (orange)
+        // End marker (orange pin)
         new naver.maps.Marker({
           position: endPos,
           map: map,
           icon: {
             content: `
-              <div style="display:flex;flex-direction:column;align-items:center;">
-                <div style="background:#FFA500;color:white;padding:4px 10px;border-radius:12px;font-size:11px;font-weight:bold;white-space:nowrap;box-shadow:0 2px 8px rgba(255,165,0,0.4);">도착</div>
-                <div style="width:2px;height:8px;background:#FFA500;"></div>
-                <div style="width:8px;height:8px;background:#FFA500;border-radius:50%;"></div>
+              <div style="display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 3px 6px rgba(255,165,0,0.45));">
+                <div style="background:#FFA500;color:white;padding:5px 12px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap;">도착</div>
+                <div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #FFA500;margin-top:-1px;"></div>
               </div>
             `,
-            anchor: new naver.maps.Point(25, 44)
+            anchor: new naver.maps.Point(25, 37)
           }
         });
 
@@ -158,23 +158,23 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
               (coord: number[]) => new naver.maps.LatLng(coord[1], coord[0]) // [lng, lat] -> LatLng(lat, lng)
             );
 
-            // 외곽선(그림자) 효과를 위한 백그라운드 라인
+            // 외곽선 그림자 라인
             new naver.maps.Polyline({
               map: map,
               path: routePath,
-              strokeColor: '#1E5BBF', // 짙은 파란색
-              strokeWeight: 7,
-              strokeOpacity: 0.3,
+              strokeColor: '#1a56c4',
+              strokeWeight: 10,
+              strokeOpacity: 0.25,
               strokeLineCap: 'round',
               strokeLineJoin: 'round',
             });
 
-            // 메인 경로 라인 (솔리드 라인)
+            // 메인 경로 라인
             new naver.maps.Polyline({
               map: map,
               path: routePath,
               strokeColor: '#3182F6',
-              strokeWeight: 6,
+              strokeWeight: 7,
               strokeOpacity: 1,
               strokeLineCap: 'round',
               strokeLineJoin: 'round',
@@ -190,10 +190,13 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
               setRealTaxiFare(data.taxiFare);
             }
             if (data.duration) {
-              setRouteDuration(Math.round(data.duration / 60000)); // ms to minutes
+              setRouteDuration(Math.round(data.duration / 60000));
             }
+            if (data.distance) {
+              setRouteDistance(Math.round(data.distance / 100) / 10); // m → km (소수점 1자리)
+            }
+            setMapLoading(false);
           } else {
-            // Fallback: dashed line if no route found
             new naver.maps.Polyline({
               map: map,
               path: [startPos, endPos],
@@ -204,10 +207,10 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
               strokeLineCap: 'round',
               strokeLineJoin: 'round',
             });
+            setMapLoading(false);
           }
         } catch (dirErr) {
           console.error('[Directions API fetch error]', dirErr);
-          // Fallback: dashed line on error
           new naver.maps.Polyline({
             map: map,
             path: [startPos, endPos],
@@ -218,6 +221,7 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
             strokeLineCap: 'round',
             strokeLineJoin: 'round',
           });
+          setMapLoading(false);
         }
 
       } catch (e) {
@@ -408,9 +412,37 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
       <div className="px-6 py-6 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 120px)' }}>
         {/* Interactive Map */}
         {hasCoords ? (
-          <div ref={mapRef} className="rounded-3xl overflow-hidden h-48 bg-gray-100 z-0" />
+          <div className="relative rounded-3xl overflow-hidden h-56 bg-gray-100 z-0">
+            {/* 스켈레톤 로딩 */}
+            {mapLoading && (
+              <div className="absolute inset-0 bg-gray-200 z-10 flex items-center justify-center">
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-8 h-8 border-3 border-gray-300 border-t-[#3182F6] rounded-full animate-spin" style={{ borderWidth: '3px' }} />
+                  <p className="text-xs text-gray-400 font-medium">경로 불러오는 중...</p>
+                </div>
+              </div>
+            )}
+            <div ref={mapRef} className="w-full h-full" />
+            {/* 소요시간/거리 오버레이 */}
+            {!mapLoading && (routeDuration || routeDistance) && (
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-2 z-10">
+                {routeDuration && (
+                  <div className="bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-md flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-[#3182F6]" />
+                    <span className="text-xs font-bold text-[#191F28]">약 {routeDuration}분</span>
+                  </div>
+                )}
+                {routeDistance && (
+                  <div className="bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-md flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-[#3182F6]" />
+                    <span className="text-xs font-bold text-[#191F28]">{routeDistance}km</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         ) : (
-          <div className="bg-gray-100 rounded-3xl h-48 flex items-center justify-center z-0">
+          <div className="bg-gray-100 rounded-3xl h-56 flex items-center justify-center z-0">
             <div className="text-center">
               <MapPin className="w-12 h-12 text-gray-400 mx-auto mb-2" />
               <p className="text-gray-500 font-medium">위치 정보 없음</p>
