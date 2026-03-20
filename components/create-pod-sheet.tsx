@@ -2,7 +2,7 @@
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, MapPin, Clock, Users, Edit3 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { haptics } from '@/lib/haptics';
@@ -23,10 +23,13 @@ interface CreatePodSheetProps {
     departureTime: string;
     maxMembers: number;
     genderPreference: 'male' | 'female' | 'any';
+    hasDeposit: boolean;
+    depositAmount: number;
   }) => void;
+  initialData?: any;
 }
 
-export function CreatePodSheet({ isOpen, onClose, onSubmit }: CreatePodSheetProps) {
+export function CreatePodSheet({ isOpen, onClose, onSubmit, initialData }: CreatePodSheetProps) {
   const [departure, setDeparture] = useState<LocationInfo | null>(null);
   const [departureDetail, setDepartureDetail] = useState('');
   const [destination, setDestination] = useState<LocationInfo | null>(null);
@@ -36,7 +39,6 @@ export function CreatePodSheet({ isOpen, onClose, onSubmit }: CreatePodSheetProp
 
   // Custom states replacing generic native selectors
   const [departureTime, setDepartureTime] = useState<Date>(() => {
-    // Default to +30 minutes from now rounded to 5 min
     const d = new Date();
     d.setMinutes(d.getMinutes() + 30);
     d.setMinutes(Math.ceil(d.getMinutes() / 5) * 5);
@@ -44,6 +46,61 @@ export function CreatePodSheet({ isOpen, onClose, onSubmit }: CreatePodSheetProp
   });
   const [neededMembers, setNeededMembers] = useState(3); // 1명 더, 2명 더, 3명 더
   const [genderPreference, setGenderPreference] = useState<'male' | 'female' | 'any'>('any');
+  const [hasDeposit, setHasDeposit] = useState(false);
+  const [depositAmount, setDepositAmount] = useState<number | ''>('');
+
+  useEffect(() => {
+    if (isOpen) {
+      if (initialData) {
+        setDeparture({
+          address: initialData.departure,
+          lat: initialData.startLat || 0,
+          lng: initialData.startLng || 0
+        });
+        setDepartureDetail(initialData.departureDetail || '');
+        setDestination({
+          address: initialData.destination,
+          lat: initialData.endLat || 0,
+          lng: initialData.endLng || 0
+        });
+        setNeededMembers(initialData.maxMembers ? Math.max(1, initialData.maxMembers - 1) : 3);
+        setGenderPreference(initialData.genderFilter || 'any');
+        setHasDeposit(initialData.hasDeposit || false);
+        setDepositAmount(initialData.depositAmount || '');
+
+        // 매주 동일 시간 (또는 오늘 같은 시간)
+        // 일단 현재 시간 기준으로 하되 시/분은 이전 팟의 시간으로 세팅
+        if (initialData.departureTime) {
+          try {
+            // initialData.departureTime은 "MM월 DD일 HH:MM" 형태이거나 Date string
+            // 가장 안전하게 오늘 날짜에 기존 시/분만 적용
+            const parsedOld = new Date(initialData.departureTime);
+            if (!isNaN(parsedOld.getTime())) {
+              const d = new Date();
+              d.setHours(parsedOld.getHours(), parsedOld.getMinutes(), 0, 0);
+              // 만약 과거 시간이면 내일로 설정
+              if (d.getTime() < Date.now()) {
+                d.setDate(d.getDate() + 1);
+              }
+              setDepartureTime(d);
+            }
+          } catch(e) {}
+        }
+      } else {
+        setDeparture(null);
+        setDepartureDetail('');
+        setDestination(null);
+        const d = new Date();
+        d.setMinutes(d.getMinutes() + 30);
+        d.setMinutes(Math.ceil(d.getMinutes() / 5) * 5);
+        setDepartureTime(d);
+        setNeededMembers(3);
+        setGenderPreference('any');
+        setHasDeposit(false);
+        setDepositAmount('');
+      }
+    }
+  }, [isOpen, initialData]);
 
   const handleSubmit = () => {
     if (!departure || !destination) return;
@@ -58,13 +115,17 @@ export function CreatePodSheet({ isOpen, onClose, onSubmit }: CreatePodSheetProp
       destinationLng: destination.lng,
       departureTime: departureTime.toISOString(),
       maxMembers: neededMembers + 1, // Add host (1) to needed members
-      genderPreference
+      genderPreference,
+      hasDeposit,
+      depositAmount: hasDeposit ? Number(depositAmount) || 0 : 0
     });
     setDeparture(null);
     setDepartureDetail('');
     setDestination(null);
     setNeededMembers(3);
     setGenderPreference('any');
+    setHasDeposit(false);
+    setDepositAmount('');
     onClose();
   };
 
@@ -224,6 +285,45 @@ export function CreatePodSheet({ isOpen, onClose, onSubmit }: CreatePodSheetProp
                       상관없음
                     </motion.button>
                   </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-semibold text-gray-600 block">
+                      예약금 설정
+                    </label>
+                    <div 
+                      onClick={() => {
+                        haptics.light();
+                        setHasDeposit(!hasDeposit);
+                      }}
+                      className={`w-12 h-6 rounded-full p-1 cursor-pointer transition-colors ${hasDeposit ? 'bg-[#3182F6]' : 'bg-gray-300'}`}
+                    >
+                      <motion.div 
+                        className="w-4 h-4 bg-white rounded-full"
+                        animate={{ x: hasDeposit ? 24 : 0 }}
+                        transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                      />
+                    </div>
+                  </div>
+                  <AnimatePresence>
+                    {hasDeposit && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="overflow-hidden"
+                      >
+                        <Input
+                          type="number"
+                          placeholder="예약금 금액 (예: 2000)"
+                          value={depositAmount}
+                          onChange={(e) => setDepositAmount(e.target.value ? Number(e.target.value) : '')}
+                          className="h-14 rounded-2xl bg-[#F2F4F6] border-0 px-5 text-base placeholder-gray-400 mt-2"
+                        />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
               </div>
 

@@ -15,13 +15,20 @@ interface Participant {
   avatar?: string;
 }
 
-interface Pod {
+export interface Pod {
   id: string;
   departure: string;
   destination: string;
   departureTime: string;
   status: 'completed' | 'upcoming' | 'cancelled';
   participants?: Participant[];
+  startLat?: number;
+  startLng?: number;
+  endLat?: number;
+  endLng?: number;
+  maxMembers?: number;
+  genderFilter?: string;
+  departureDetail?: string;
 }
 
 import { supabase } from '@/lib/supabase';
@@ -74,7 +81,7 @@ function ParticipantsModal({ isOpen, onClose, participants }: ParticipantsModalP
   );
 }
 
-export function MyPage({ user }: { user?: any }) {
+export function MyPage({ user, onRecreatePod }: { user?: any; onRecreatePod?: (pod: Pod) => void }) {
   const [mannerTemp, setMannerTemp] = useState(36.5);
   const [bankAccount, setBankAccount] = useState('');
   const [isEditingAccount, setIsEditingAccount] = useState(false);
@@ -119,12 +126,19 @@ export function MyPage({ user }: { user?: any }) {
               month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
             }),
             status: p.status as "upcoming" | "completed" | "cancelled",
-            participants: p.party_members?.map((m: any) => ({
-              id: m.user_id,
-              name: m.user?.nickname || "멤버",
-              avatar: m.user?.avatar_url || ""
-            })) || []
-          })));
+              participants: p.party_members?.map((m: any) => ({
+                id: m.user_id,
+                name: m.user?.nickname || "멤버",
+                avatar: m.user?.avatar_url || ""
+              })) || [],
+              startLat: p.start_lat,
+              startLng: p.start_lng,
+              endLat: p.end_lat,
+              endLng: p.end_lng,
+              maxMembers: p.max_member,
+              genderFilter: p.gender_filter,
+              departureDetail: p.departure_detail
+            })));
         }
       });
 
@@ -154,7 +168,14 @@ export function MyPage({ user }: { user?: any }) {
                 id: m.user_id,
                 name: m.user?.nickname || "멤버",
                 avatar: m.user?.avatar_url || ""
-              })) || []
+              })) || [],
+              startLat: p.start_lat,
+              startLng: p.start_lng,
+              endLat: p.end_lat,
+              endLng: p.end_lng,
+              maxMembers: p.max_member,
+              genderFilter: p.gender_filter,
+              departureDetail: p.departure_detail
             }));
           setJoinedPods(joined);
         }

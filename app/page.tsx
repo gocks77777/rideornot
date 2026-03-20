@@ -34,6 +34,7 @@ function estimateTaxiFare(distKm: number): number {
 export default function Home() {
   const [activeTab, setActiveTab] = useState('home');
   const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false);
+  const [createPodInitialData, setCreatePodInitialData] = useState<any>(null);
   const [searchSheetOpen, setSearchSheetOpen] = useState(false);
   const [searchFocus, setSearchFocus] = useState<'departure' | 'destination' | null>(null);
   const [pushGuideOpen, setPushGuideOpen] = useState(false);
@@ -84,6 +85,8 @@ export default function Home() {
           currentMembers: p.current_member,
           maxMembers: p.max_member,
           genderFilter: p.gender_filter || 'any',
+          hasDeposit: p.has_deposit,
+          depositAmount: p.deposit_amount,
           departureTime: new Date(p.departure_time).toLocaleString('ko-KR', {
             month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
           }),
@@ -382,7 +385,13 @@ export default function Home() {
               exit="exit"
               transition={{ duration: 0.3 }}
             >
-              <MyPage user={user} />
+              <MyPage 
+                user={user} 
+                onRecreatePod={(pod) => {
+                  setCreatePodInitialData(pod);
+                  setIsCreateSheetOpen(true);
+                }} 
+              />
             </motion.div>
           )}
         </AnimatePresence>
@@ -396,8 +405,12 @@ export default function Home() {
 
         <CreatePodSheet
           isOpen={isCreateSheetOpen}
-          onClose={() => setIsCreateSheetOpen(false)}
+          onClose={() => {
+            setIsCreateSheetOpen(false);
+            setCreatePodInitialData(null);
+          }}
           onSubmit={handleCreatePod}
+          initialData={createPodInitialData}
         />
 
         <GenderOnboarding 
@@ -464,6 +477,26 @@ export default function Home() {
               // 성공 처리
               haptics.success();
               alert('팟에 참여했습니다! 🎉');
+              
+              // 알림 전송 (본인 제외)
+              const notifyUsers = selectedPod.participants.map((p: any) => p.id);
+              if (selectedPod.hostId && !notifyUsers.includes(selectedPod.hostId)) {
+                notifyUsers.push(selectedPod.hostId);
+              }
+              const targets = notifyUsers.filter((id: string) => id !== user.id);
+              targets.forEach((targetId: string) => {
+                fetch('/api/push', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    userId: targetId,
+                    title: '새로운 참여자 🎉',
+                    body: `${user.user_metadata?.full_name || user?.user_metadata?.name || '누군가'}님이 팟에 참여했습니다!`,
+                    url: '/'
+                  })
+                }).catch(console.error);
+              });
+
               setSelectedPodId(null);
               fetchPods();
             }}

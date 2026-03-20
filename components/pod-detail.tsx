@@ -556,10 +556,15 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
               </div>
             )}
             <div className="flex items-center justify-between pt-3 border-t border-gray-200">
-              <span className="text-gray-600">1인당</span>
+              <span className="text-gray-600">1인당 (목표 인원 기준)</span>
               <span className="font-bold text-2xl text-[#3182F6]">{costPerPerson.toLocaleString()} 원</span>
             </div>
           </div>
+          {pod.maxMembers > 1 && (
+            <div className="mt-4 bg-blue-50 text-[#3182F6] text-sm font-semibold rounded-xl p-3 text-center border border-blue-100">
+              🎉 혼자 탈 때보다 1인당 <span className="text-lg">{(displayFare - costPerPerson).toLocaleString()}원</span>을 아낄 수 있어요!
+            </div>
+          )}
         </div>
 
         {/* Host Bank Account and Comments Combined */}
@@ -656,12 +661,32 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
       )}
 
       {isHost && (
-        <div className="fixed bottom-0 left-0 right-0 p-6 bg-white border-t border-gray-100" style={{ maxWidth: '480px', margin: '0 auto' }}>
+        <div className="fixed bottom-0 left-0 right-0 p-6 bg-white border-t border-gray-100 flex gap-2" style={{ maxWidth: '480px', margin: '0 auto' }}>
           <Button 
             onClick={handleCancelPod}
-            className="w-full bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-600 rounded-full py-6 text-lg font-bold transition-colors"
+            className="flex-1 bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-600 rounded-full py-6 text-lg font-bold transition-colors"
           >
-            이 팟 취소하기 (폭파)
+            취소하기 (폭파)
+          </Button>
+          <Button 
+            onClick={async () => {
+              if (!window.confirm('이 팟의 이용을 완료하시겠습니까? 완료 시 마이페이지에서 다시 만들 수 있습니다.')) return;
+              haptics.success();
+              const { error } = await supabase
+                .from("parties")
+                .update({ status: "completed" })
+                .eq("id", pod.id)
+                .eq("host_id", user.id);
+              if (error) {
+                alert(`이용 완료 처리에 실패했습니다: ${error.message}`);
+              } else {
+                alert("이용 완료 처리되었습니다! 🎉");
+                onBack();
+              }
+            }}
+            className="flex-1 bg-[#3182F6] text-white hover:bg-[#2968C8] rounded-full py-6 text-lg font-bold transition-colors"
+          >
+            이용 완료
           </Button>
         </div>
       )}
