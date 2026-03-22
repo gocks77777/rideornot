@@ -200,17 +200,24 @@ export function SearchScreen({ isOpen, onClose, onCreatePod, onPodClick, allPods
     setSearchResults(exactResults);
 
     // 3) 경로 호환 매칭: 출발/도착 좌표가 모두 있을 때
+    console.log('[방향매칭] depCoords:', depCoords, 'destCoords:', destCoords, 'allPods count:', allPods.length);
     if (depCoords && destCoords) {
       const dirMatched = allPods.filter(pod => {
         if (exactResults.some(r => r.id === pod.id)) return false;
-        if (!pod.startLat || !pod.startLng || !pod.endLat || !pod.endLng) return false;
-        return isRouteCompatible(
+        if (!pod.startLat || !pod.startLng || !pod.endLat || !pod.endLng) {
+          console.log('[방향매칭] 좌표없음 제외:', pod.departure, '→', pod.destination);
+          return false;
+        }
+        const result = isRouteCompatible(
           depCoords!.lat, depCoords!.lng,
           destCoords!.lat, destCoords!.lng,
           pod.startLat, pod.startLng,
           pod.endLat, pod.endLng
         );
+        console.log(`[방향매칭] ${pod.departure}→${pod.destination}: ${result ? '✅' : '❌'}`);
+        return result;
       });
+      console.log('[방향매칭] 결과:', dirMatched.length, '개');
       setDirectionResults(dirMatched);
     } else {
       setDirectionResults([]);
