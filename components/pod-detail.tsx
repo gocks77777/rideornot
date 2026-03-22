@@ -423,12 +423,35 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
   const handleSendComment = async () => {
     if (!commentInput.trim() || !user || isSendingComment) return;
     setIsSendingComment(true);
+    const message = commentInput.trim();
     const { error } = await supabase.from('comments').insert({
       party_id: pod.id,
       user_id: user.id,
-      message: commentInput.trim()
+      message
     });
-    if (!error) setCommentInput('');
+    if (!error) {
+      setCommentInput('');
+      // 본인 제외 참여자 전원에게 댓글 알림
+      const senderName = user.user_metadata?.full_name || user.user_metadata?.name || '누군가';
+      const targets = approvedParticipants
+        .filter(p => p.id !== user.id)
+        .map(p => p.id);
+      if (pod.hostId && pod.hostId !== user.id && !targets.includes(pod.hostId)) {
+        targets.push(pod.hostId);
+      }
+      targets.forEach(targetId => {
+        fetch('/api/push', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: targetId,
+            title: `💬 ${senderName}님의 댓글`,
+            body: message.length > 40 ? message.slice(0, 40) + '…' : message,
+            url: '/'
+          })
+        }).catch(console.error);
+      });
+    }
     setIsSendingComment(false);
     haptics.light();
   };
@@ -682,20 +705,43 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
                 )}
                 <span className="text-sm font-semibold text-[#191F28] flex-1">{participant.name}</span>
                 {isHost && (
-                  <button
-                    onClick={() => togglePaidStatus(participant.id)}
-                    className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                      participantsPaidStatus[participant.id]
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-gray-100 text-gray-600'
-                    }`}
-                  >
-                    {participantsPaidStatus[participant.id] ? (
-                      <><Check className="w-3 h-3" /><span>송금완료</span></>
-                    ) : (
-                      <span>미송금</span>
+                  <div className="flex items-center gap-1.5">
+                    {!participantsPaidStatus[participant.id] && (
+                      <button
+                        onClick={() => {
+                          haptics.medium();
+                          fetch('/api/push', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              userId: participant.id,
+                              title: '💸 송금 잊으셨나요?',
+                              body: `${pod.departure} → ${pod.destination} 팟 택시비 송금을 까먹으신 건 아닌가요?`,
+                              url: '/'
+                            })
+                          }).then(() => alert(`${participant.name}님에게 재촉 알림을 보냈어요!`))
+                            .catch(() => alert('알림 전송에 실패했어요.'));
+                        }}
+                        className="px-2.5 py-1.5 rounded-full text-xs font-medium bg-orange-100 text-orange-600 hover:bg-orange-200 transition-colors"
+                      >
+                        재촉하기
+                      </button>
                     )}
-                  </button>
+                    <button
+                      onClick={() => togglePaidStatus(participant.id)}
+                      className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                        participantsPaidStatus[participant.id]
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-gray-100 text-gray-600'
+                      }`}
+                    >
+                      {participantsPaidStatus[participant.id] ? (
+                        <><Check className="w-3 h-3" /><span>송금완료</span></>
+                      ) : (
+                        <span>미송금</span>
+                      )}
+                    </button>
+                  </div>
                 )}
               </div>
             ))}
