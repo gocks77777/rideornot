@@ -518,6 +518,18 @@ export function MyPage({ user, onRecreatePod }: { user?: any; onRecreatePod?: (p
                   </div>
                   {getStatusBadge(pod.status)}
                 </div>
+                {onRecreatePod && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      haptics.medium();
+                      onRecreatePod(pod);
+                    }}
+                    className="w-full mt-2 py-2 text-sm font-semibold text-[#3182F6] bg-blue-50 rounded-xl hover:bg-blue-100 transition-colors"
+                  >
+                    이 팟 또 만들기 🔁
+                  </button>
+                )}
               </motion.div>
             ))}
             {hostingPods.length === 0 && (

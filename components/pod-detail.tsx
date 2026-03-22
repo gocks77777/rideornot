@@ -14,6 +14,7 @@ interface Participant {
   name: string;
   avatar?: string;
   paid?: boolean;
+  memberStatus?: 'pending' | 'joined' | 'paid';
 }
 
 interface Comment {
@@ -23,6 +24,12 @@ interface Comment {
   userAvatar?: string;
   message: string;
   createdAt: string;
+}
+
+interface PendingMember {
+  userId: string;
+  name: string;
+  avatar?: string;
 }
 
 interface PodDetailProps {
@@ -43,6 +50,8 @@ interface PodDetailProps {
     participants: Participant[];
     hostName?: string;
     hostBankAccount?: string;
+    hasDeposit?: boolean;
+    depositAmount?: number;
   };
   onBack: () => void;
   onJoin?: () => void;
@@ -51,11 +60,15 @@ interface PodDetailProps {
 }
 
 export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDetailProps) {
-  const emptySlots = pod.maxMembers - pod.participants.length;
+  // pending 멤버는 아직 승인 전이므로 빈자리 계산에서 제외
+  const approvedParticipants = pod.participants.filter(p => p.memberStatus !== 'pending');
+  const emptySlots = pod.maxMembers - approvedParticipants.length;
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const [participantsPaidStatus, setParticipantsPaidStatus] = useState<Record<string, boolean>>(
-    pod.participants.reduce((acc, p) => ({ ...acc, [p.id]: p.paid || false }), {})
+    pod.participants
+      .filter(p => p.memberStatus !== 'pending')
+      .reduce((acc, p) => ({ ...acc, [p.id]: p.paid || false }), {})
   );
 
   // Map ref for interactive map
@@ -73,11 +86,102 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
   const [isSendingComment, setIsSendingComment] = useState(false);
   const commentsEndRef = useRef<HTMLDivElement>(null);
 
+  // Pending members (for host)
+  const [pendingMembers, setPendingMembers] = useState<PendingMember[]>([]);
+
   const hasCoords = pod.startLat && pod.startLng && pod.endLat && pod.endLng;
 
   // Use real fare if available, otherwise use estimate
   const displayFare = realTaxiFare || pod.estimatedCost;
   const costPerPerson = Math.round(displayFare / pod.maxMembers);
+
+  // 방장일 때 pending 멤버 조회
+  useEffect(() => {
+    if (!isHost || !pod.hasDeposit) return;
+    const fetchPending = async () => {
+      // 1단계: pending 멤버 user_id 조회
+      const { data: memberRows } = await supabase
+        .from('party_members')
+        .select('user_id')
+        .eq('party_id', pod.id)
+        .eq('status', 'pending');
+      if (!memberRows || memberRows.length === 0) { setPendingMembers([]); return; }
+
+      // 2단계: user 정보 별도 조회 (FK join 의존성 제거)
+      const userIds = memberRows.map((m: any) => m.user_id);
+      const { data: userRows } = await supabase
+        .from('users')
+        .select('id, nickname, avatar_url')
+        .in('id', userIds);
+
+      const userMap: Record<string, { nickname: string; avatar_url: string }> = {};
+      userRows?.forEach((u: any) => { userMap[u.id] = u; });
+
+      setPendingMembers(memberRows.map((m: any) => ({
+        userId: m.user_id,
+        name: userMap[m.user_id]?.nickname || '멤버',
+        avatar: userMap[m.user_id]?.avatar_url || ''
+      })));
+    };
+    fetchPending();
+  }, [isHost, pod.hasDeposit, pod.id]);
+
+  const handleApproveMember = async (userId: string) => {
+    const { error } = await supabase
+      .from('party_members')
+      .update({ status: 'joined' })
+      .eq('party_id', pod.id)
+      .eq('user_id', userId);
+    if (error) { alert('승인 실패: ' + error.message); return; }
+
+    // stale 방지: DB에서 현재 인원 조회 후 +1
+    const { data: partyRow } = await supabase
+      .from('parties')
+      .select('current_member')
+      .eq('id', pod.id)
+      .single();
+    if (partyRow) {
+      await supabase.from('parties')
+        .update({ current_member: partyRow.current_member + 1 })
+        .eq('id', pod.id);
+    }
+
+    setPendingMembers(prev => prev.filter(m => m.userId !== userId));
+    haptics.success();
+    // 멤버에게 승인 알림
+    fetch('/api/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId,
+        title: '참여 승인됐어요! 🎉',
+        body: `${pod.departure} → ${pod.destination} 팟 참여가 승인됐어요!`,
+        url: '/'
+      })
+    }).catch(console.error);
+  };
+
+  const handleRejectMember = async (userId: string) => {
+    const { error } = await supabase
+      .from('party_members')
+      .update({ status: 'rejected' })
+      .eq('party_id', pod.id)
+      .eq('user_id', userId);
+    if (error) { alert('거절 실패: ' + error.message); return; }
+    setPendingMembers(prev => prev.filter(m => m.userId !== userId));
+    haptics.light();
+    // 멤버에게 거절 알림
+    fetch('/api/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId,
+        title: '참여 신청 거절',
+        body: `${pod.departure} → ${pod.destination} 팟 참여가 거절됐어요. 예약금은 돌려받으세요.`,
+        url: '/'
+      })
+    }).catch(console.error);
+  };
 
   // Initialize Naver Map with route
   useEffect(() => {
@@ -389,7 +493,9 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
     }
   };
 
-  const isMember = user && pod.participants.some(p => p.id === user.id);
+  const myParticipation = user ? pod.participants.find(p => p.id === user.id) : null;
+  const isMember = !!myParticipation && myParticipation.memberStatus !== 'pending';
+  const isPending = !!myParticipation && myParticipation.memberStatus === 'pending';
 
   return (
     <motion.div
@@ -498,11 +604,74 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
           </div>
         </div>
 
+        {/* 예약금 안내 (멤버용) */}
+        {pod.hasDeposit && !isHost && (
+          <div className="bg-amber-50 border border-amber-200 rounded-3xl p-5">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl">💰</span>
+              <div>
+                <p className="font-bold text-amber-800 mb-1">예약금 필요한 팟이에요</p>
+                <p className="text-sm text-amber-700">
+                  참여하려면 <span className="font-bold">{(pod.depositAmount || 0).toLocaleString()}원</span>을 먼저 방장 계좌로 송금해주세요.
+                  송금 후 방장이 확인하면 참여가 승인됩니다.
+                </p>
+                {pod.hostBankAccount && (
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(pod.hostBankAccount || '');
+                      haptics.medium();
+                      alert('계좌번호가 복사됐어요!');
+                    }}
+                    className="mt-2 text-xs bg-amber-200 text-amber-900 px-3 py-1.5 rounded-full font-semibold"
+                  >
+                    계좌 복사: {pod.hostBankAccount}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 방장 - 승인 대기 멤버 */}
+        {isHost && pod.hasDeposit && pendingMembers.length > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-3xl p-5">
+            <h2 className="text-sm font-bold text-amber-800 mb-3">⏳ 승인 대기 {pendingMembers.length}명</h2>
+            <div className="space-y-3">
+              {pendingMembers.map((m) => (
+                <div key={m.userId} className="flex items-center gap-3 bg-white rounded-2xl p-3">
+                  {m.avatar ? (
+                    <img src={m.avatar} alt={m.name} className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-amber-400 flex items-center justify-center text-white font-bold flex-shrink-0">
+                      {m.name.charAt(0)}
+                    </div>
+                  )}
+                  <span className="text-sm font-semibold text-[#191F28] flex-1">{m.name}</span>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleRejectMember(m.userId)}
+                      className="px-3 py-1.5 rounded-full text-xs font-semibold bg-red-100 text-red-600"
+                    >
+                      거절
+                    </button>
+                    <button
+                      onClick={() => handleApproveMember(m.userId)}
+                      className="px-3 py-1.5 rounded-full text-xs font-semibold bg-green-100 text-green-700"
+                    >
+                      승인
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Participants */}
         <div className="bg-[#F2F4F6] rounded-3xl p-6">
           <h2 className="text-sm font-semibold text-gray-600 mb-4">참여자</h2>
           <div className="space-y-3">
-            {pod.participants.map((participant) => (
+            {approvedParticipants.map((participant) => (
               <div key={participant.id} className="flex items-center gap-3 bg-white rounded-2xl p-3">
                 {participant.avatar ? (
                   <img src={participant.avatar} alt={participant.name} className="w-12 h-12 rounded-full border border-gray-200 flex-shrink-0 object-cover" />
@@ -640,14 +809,26 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
       </div>
 
       {/* Bottom action button */}
-      {!isHost && !isMember && (
+      {!isHost && !isMember && !isPending && (
         <div className="fixed bottom-0 left-0 right-0 p-6 bg-white border-t border-gray-100" style={{ maxWidth: '480px', margin: '0 auto' }}>
           <Button
             className="w-full bg-[#3182F6] text-white rounded-full py-6 text-lg font-bold shadow-lg hover:bg-[#2968C8]"
             onClick={handleJoinClick}
             disabled={isJoining}
           >
-            {isJoining ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : '참여하기'}
+            {isJoining ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : (
+              pod.hasDeposit
+                ? `예약금 ${(pod.depositAmount || 0).toLocaleString()}원 송금 후 신청하기`
+                : '참여하기'
+            )}
+          </Button>
+        </div>
+      )}
+
+      {isPending && !isHost && (
+        <div className="fixed bottom-0 left-0 right-0 p-6 bg-white border-t border-gray-100" style={{ maxWidth: '480px', margin: '0 auto' }}>
+          <Button disabled className="w-full bg-amber-100 text-amber-700 rounded-full py-6 text-lg font-bold cursor-not-allowed">
+            방장 승인 대기 중 ⏳
           </Button>
         </div>
       )}

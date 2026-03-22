@@ -12,7 +12,8 @@ interface Pod {
   currentMembers: number;
   maxMembers: number;
   departureTime: string;
-  status: 'recruiting' | 'full';
+  status: 'recruiting' | 'full' | string;
+  estimatedCost?: number;
 }
 
 interface PodListProps {
@@ -75,6 +76,17 @@ export function PodList({ pods, onPodClick }: PodListProps) {
               <span className="text-sm">{pod.currentMembers}/{pod.maxMembers}</span>
             </div>
           </div>
+          {pod.estimatedCost && pod.maxMembers > 1 && (
+            <div className="mt-3 flex items-center gap-2">
+              <span className="text-xs text-gray-500">1인당 약</span>
+              <span className="text-sm font-bold text-[#3182F6]">
+                {Math.round(pod.estimatedCost / pod.maxMembers).toLocaleString()}원
+              </span>
+              <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">
+                {Math.round((pod.estimatedCost - pod.estimatedCost / pod.maxMembers)).toLocaleString()}원 절약
+              </span>
+            </div>
+          )}
         </motion.div>
       ))}
     </div>

@@ -94,11 +94,15 @@ export default function Home() {
           hostName: p.host?.nickname || '방장',
           hostBankAccount: p.host?.bank_account || '',
           estimatedCost: fare,
-          participants: p.party_members?.map((m: any) => ({
-            id: m.user_id,
-            name: m.user?.nickname || '멤버',
-            avatar: m.user?.avatar_url || ''
-          })) || []
+          participants: p.party_members
+            ?.filter((m: any) => m.status !== 'rejected')
+            .map((m: any) => ({
+              id: m.user_id,
+              name: m.user?.nickname || '멤버',
+              avatar: m.user?.avatar_url || '',
+              paid: m.status === 'paid',
+              memberStatus: m.status  // 'pending' | 'joined' | 'paid'
+            })) || []
         };
       });
       setAllPods(formatted);
@@ -448,54 +452,82 @@ export default function Home() {
                 return;
               }
 
-              // 중복 참여 확인
+              // 중복 참여 확인 (rejected는 재신청 허용)
               const { data: existing } = await supabase
                 .from('party_members')
-                .select('user_id')
+                .select('user_id, status')
                 .eq('party_id', selectedPod.id)
                 .eq('user_id', user.id)
                 .maybeSingle();
-              if (existing) {
+              if (existing && existing.status !== 'rejected') {
                 alert('이미 참여한 팟입니다.');
                 return;
               }
 
-              // DB 저장
-              const { error: joinErr } = await supabase.from('party_members').insert({
-                party_id: selectedPod.id,
-                user_id: user.id,
-                status: 'joined'
-              });
+              const isDepositPod = selectedPod.hasDeposit;
+              const memberStatus = isDepositPod ? 'pending' : 'joined';
+
+              // DB 저장 (rejected → upsert로 재신청)
+              const { error: joinErr } = existing
+                ? await supabase.from('party_members')
+                    .update({ status: memberStatus })
+                    .eq('party_id', selectedPod.id)
+                    .eq('user_id', user.id)
+                : await supabase.from('party_members').insert({
+                    party_id: selectedPod.id,
+                    user_id: user.id,
+                    status: memberStatus
+                  });
               if (joinErr) {
                 alert('참여 실패: ' + joinErr.message);
                 return;
               }
-              await supabase.from('parties').update({
-                current_member: party.current_member + 1
-              }).eq('id', selectedPod.id);
+
+              // 예약금 없는 팟만 즉시 인원 증가
+              if (!isDepositPod) {
+                await supabase.from('parties').update({
+                  current_member: party.current_member + 1
+                }).eq('id', selectedPod.id);
+              }
 
               // 성공 처리
               haptics.success();
-              alert('팟에 참여했습니다! 🎉');
-              
-              // 알림 전송 (본인 제외)
-              const notifyUsers = selectedPod.participants.map((p: any) => p.id);
-              if (selectedPod.hostId && !notifyUsers.includes(selectedPod.hostId)) {
-                notifyUsers.push(selectedPod.hostId);
+              if (isDepositPod) {
+                alert('참여 신청이 완료됐습니다! 방장이 송금 확인 후 승인해드릴 거예요 🙏');
+                // 방장에게만 알림
+                if (selectedPod.hostId) {
+                  fetch('/api/push', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      userId: selectedPod.hostId,
+                      title: '새 참여 신청 💰',
+                      body: `${user.user_metadata?.full_name || user?.user_metadata?.name || '누군가'}님이 예약금을 보내고 참여 신청했어요!`,
+                      url: '/'
+                    })
+                  }).catch(console.error);
+                }
+              } else {
+                alert('팟에 참여했습니다! 🎉');
+                // 방장 + 기존 멤버에게 알림
+                const notifyUsers = selectedPod.participants.map((p: any) => p.id);
+                if (selectedPod.hostId && !notifyUsers.includes(selectedPod.hostId)) {
+                  notifyUsers.push(selectedPod.hostId);
+                }
+                const targets = notifyUsers.filter((id: string) => id !== user.id);
+                targets.forEach((targetId: string) => {
+                  fetch('/api/push', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      userId: targetId,
+                      title: '새로운 참여자 🎉',
+                      body: `${user.user_metadata?.full_name || user?.user_metadata?.name || '누군가'}님이 팟에 참여했습니다!`,
+                      url: '/'
+                    })
+                  }).catch(console.error);
+                });
               }
-              const targets = notifyUsers.filter((id: string) => id !== user.id);
-              targets.forEach((targetId: string) => {
-                fetch('/api/push', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    userId: targetId,
-                    title: '새로운 참여자 🎉',
-                    body: `${user.user_metadata?.full_name || user?.user_metadata?.name || '누군가'}님이 팟에 참여했습니다!`,
-                    url: '/'
-                  })
-                }).catch(console.error);
-              });
 
               setSelectedPodId(null);
               fetchPods();
