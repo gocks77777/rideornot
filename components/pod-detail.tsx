@@ -92,6 +92,7 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
   const [reportTarget, setReportTarget] = useState<{ userId: string; userName: string } | null>(null);
 
   const mapRef = useRef<HTMLDivElement>(null);
+  const isInitialCommentLoad = useRef(true);
 
   const [realTaxiFare, setRealTaxiFare] = useState<number | null>(null);
   const [routeDuration, setRouteDuration] = useState<number | null>(null);
@@ -367,6 +368,10 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
   }, [pod.id]);
 
   useEffect(() => {
+    if (isInitialCommentLoad.current) {
+      isInitialCommentLoad.current = false;
+      return;
+    }
     commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [comments]);
 
@@ -515,10 +520,10 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
       className="fixed inset-0 bg-white z-50 overflow-y-auto pb-24"
       style={{ maxWidth: '480px', margin: '0 auto' }}
     >
-      <header className="sticky top-0 bg-white z-[11] px-6 py-4 flex items-center gap-3 border-b border-gray-100" style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+      <header className="sticky top-0 bg-white z-[11] px-6 py-3 flex items-center gap-3 border-b border-gray-100" style={{ paddingTop: 'max(12px, env(safe-area-inset-top))' }}>
         <button
           onClick={() => { haptics.light(); onBack(); }}
-          className="w-10 h-10 rounded-full bg-[#F2F4F6] flex items-center justify-center active:scale-95 transition-transform mt-[max(5px,env(safe-area-inset-top))]"
+          className="w-10 h-10 rounded-full bg-[#F2F4F6] flex items-center justify-center active:scale-95 transition-transform"
         >
           <ArrowLeft className="w-5 h-5 text-gray-700" />
         </button>
@@ -546,14 +551,14 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
             {!mapLoading && (routeDuration || routeDistance) && (
               <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-2 z-10">
                 {routeDuration && (
-                  <div className="bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-md flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5 text-[#3182F6]" />
+                  <div className="bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-md flex items-center gap-1.5 whitespace-nowrap">
+                    <Clock className="w-3.5 h-3.5 text-[#3182F6] flex-shrink-0" />
                     <span className="text-xs font-bold text-[#191F28]">약 {routeDuration}분</span>
                   </div>
                 )}
                 {routeDistance && (
-                  <div className="bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-md flex items-center gap-1.5">
-                    <MapPin className="w-3.5 h-3.5 text-[#3182F6]" />
+                  <div className="bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-md flex items-center gap-1.5 whitespace-nowrap">
+                    <MapPin className="w-3.5 h-3.5 text-[#3182F6] flex-shrink-0" />
                     <span className="text-xs font-bold text-[#191F28]">{routeDistance}km</span>
                   </div>
                 )}
