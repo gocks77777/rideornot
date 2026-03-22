@@ -1,7 +1,8 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Settings, QrCode, Upload, Clock, Users, ArrowRight, LogOut, LogIn, CreditCard, Edit2, Check, BellRing, CheckCircle2 } from 'lucide-react';
+import { Clock, Users, ArrowRight, LogOut, LogIn, CreditCard, Edit2, Check, BellRing, CheckCircle2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -211,14 +212,14 @@ export function MyPage({ user, onRecreatePod }: { user?: any; onRecreatePod?: (p
 
   const handleEnablePush = async () => {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-      alert('이 브라우저는 푸시 알림을 지원하지 않습니다.');
+      toast.error('이 브라우저는 푸시 알림을 지원하지 않습니다.');
       return;
     }
 
     try {
       const permission = await Notification.requestPermission();
       if (permission !== 'granted') {
-        alert('알림 권한이 거부되었습니다.');
+        toast.error('알림 권한이 거부되었습니다.');
         return;
       }
 
@@ -227,7 +228,7 @@ export function MyPage({ user, onRecreatePod }: { user?: any; onRecreatePod?: (p
       
       if (!vapidPublicKey) {
         console.error('VAPID Public Key is missing');
-        alert('서버에 VAPID 키가 설정되지 않았습니다.');
+        toast.error('서버에 VAPID 키가 설정되지 않았습니다.');
         return;
       }
 
@@ -246,23 +247,23 @@ export function MyPage({ user, onRecreatePod }: { user?: any; onRecreatePod?: (p
       });
 
       if (error) {
-        if (error.code === '23505') { // Unique constraint violation (already registered)
+        if (error.code === '23505') {
           setIsPushEnabled(true);
           haptics.success();
-          alert('알림 설정이 완료되었습니다!');
+          toast.success('알림 설정이 완료되었습니다!');
           return;
         }
         console.error('Failed to save subscription:', error);
-        alert('알림 설정 저장 중 오류가 발생했습니다.');
+        toast.error('알림 설정 저장 중 오류가 발생했습니다.');
         return;
       }
 
       setIsPushEnabled(true);
       haptics.success();
-      alert('알림 설정이 완료되었습니다! 팟 참여/댓글 알림을 받을 수 있습니다.');
+      toast.success('알림 설정 완료! 팟 참여/댓글 알림을 받을 수 있습니다.');
     } catch (e) {
       console.error('Push setup failed', e);
-      alert('푸시 알림 설정에 실패했습니다. (아이폰의 경우 홈 화면에 앱을 추가한 뒤 실행해주세요.)');
+      toast.error('푸시 알림 설정에 실패했습니다. (아이폰은 홈 화면에 앱을 추가한 뒤 실행해주세요.)');
     }
   };
 
@@ -289,9 +290,10 @@ export function MyPage({ user, onRecreatePod }: { user?: any; onRecreatePod?: (p
 
     if (error) {
       console.error('Error saving bank account:', error);
-      alert('계좌 정보 저장 중 오류가 발생했습니다.');
+      toast.error('계좌 정보 저장 중 오류가 발생했습니다.');
     } else {
       setIsEditingAccount(false);
+      toast.success('계좌번호가 저장됐습니다!');
     }
   };
 
@@ -581,6 +583,15 @@ export function MyPage({ user, onRecreatePod }: { user?: any; onRecreatePod?: (p
             )}
           </TabsContent>
         </Tabs>
+      </div>
+
+      {/* 법적 링크 */}
+      <div className="mt-8 flex justify-center gap-4 text-xs text-gray-400">
+        <a href="/terms" className="hover:text-gray-600 underline underline-offset-2 transition-colors">이용약관</a>
+        <span>·</span>
+        <a href="/privacy" className="hover:text-gray-600 underline underline-offset-2 transition-colors font-semibold">개인정보처리방침</a>
+        <span>·</span>
+        <a href="/admin" className="hover:text-gray-600 underline underline-offset-2 transition-colors">관리자</a>
       </div>
 
       <ParticipantsModal

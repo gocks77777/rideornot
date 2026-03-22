@@ -1,13 +1,25 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { ArrowLeft, MapPin, Users, Clock, MessageCircle, Plus, Check, Send, CreditCard, Loader2 } from 'lucide-react';
+import { ArrowLeft, MapPin, Users, Clock, MessageCircle, Plus, Check, Send, CreditCard, Loader2, Flag, ThumbsUp, LogOut } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PaymentModal } from '@/components/payment-modal';
+import { ReportModal } from '@/components/report-modal';
 import { haptics } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
+import { toast } from 'sonner';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface Participant {
   id: string;
@@ -52,6 +64,7 @@ interface PodDetailProps {
     hostBankAccount?: string;
     hasDeposit?: boolean;
     depositAmount?: number;
+    genderFilter?: string;
   };
   onBack: () => void;
   onJoin?: () => void;
@@ -60,7 +73,6 @@ interface PodDetailProps {
 }
 
 export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDetailProps) {
-  // pending 멤버는 아직 승인 전이므로 빈자리 계산에서 제외
   const approvedParticipants = pod.participants.filter(p => p.memberStatus !== 'pending');
   const emptySlots = pod.maxMembers - approvedParticipants.length;
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -71,27 +83,29 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
       .reduce((acc, p) => ({ ...acc, [p.id]: p.paid || false }), {})
   );
 
-  // Map ref for interactive map
+  // Confirm dialogs
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+
+  // Report modal
+  const [reportTarget, setReportTarget] = useState<{ userId: string; userName: string } | null>(null);
+
   const mapRef = useRef<HTMLDivElement>(null);
 
-  // Real fare from Directions API
   const [realTaxiFare, setRealTaxiFare] = useState<number | null>(null);
   const [routeDuration, setRouteDuration] = useState<number | null>(null);
   const [routeDistance, setRouteDistance] = useState<number | null>(null);
   const [mapLoading, setMapLoading] = useState(true);
 
-  // Comments state
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentInput, setCommentInput] = useState('');
   const [isSendingComment, setIsSendingComment] = useState(false);
   const commentsEndRef = useRef<HTMLDivElement>(null);
 
-  // Pending members (for host)
   const [pendingMembers, setPendingMembers] = useState<PendingMember[]>([]);
 
   const hasCoords = pod.startLat && pod.startLng && pod.endLat && pod.endLng;
-
-  // Use real fare if available, otherwise use estimate
   const displayFare = realTaxiFare || pod.estimatedCost;
   const costPerPerson = Math.round(displayFare / pod.maxMembers);
 
@@ -99,7 +113,6 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
   useEffect(() => {
     if (!isHost || !pod.hasDeposit) return;
     const fetchPending = async () => {
-      // 1단계: pending 멤버 user_id 조회
       const { data: memberRows } = await supabase
         .from('party_members')
         .select('user_id')
@@ -107,7 +120,6 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
         .eq('status', 'pending');
       if (!memberRows || memberRows.length === 0) { setPendingMembers([]); return; }
 
-      // 2단계: user 정보 별도 조회 (FK join 의존성 제거)
       const userIds = memberRows.map((m: any) => m.user_id);
       const { data: userRows } = await supabase
         .from('users')
@@ -132,9 +144,8 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
       .update({ status: 'joined' })
       .eq('party_id', pod.id)
       .eq('user_id', userId);
-    if (error) { alert('승인 실패: ' + error.message); return; }
+    if (error) { toast.error('승인 실패: ' + error.message); return; }
 
-    // stale 방지: DB에서 현재 인원 조회 후 +1
     const { data: partyRow } = await supabase
       .from('parties')
       .select('current_member')
@@ -148,7 +159,7 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
 
     setPendingMembers(prev => prev.filter(m => m.userId !== userId));
     haptics.success();
-    // 멤버에게 승인 알림
+    toast.success('멤버를 승인했어요!');
     fetch('/api/push', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -156,7 +167,7 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
         userId,
         title: '참여 승인됐어요! 🎉',
         body: `${pod.departure} → ${pod.destination} 팟 참여가 승인됐어요!`,
-        url: '/'
+        url: `/?pod=${pod.id}`
       })
     }).catch(console.error);
   };
@@ -167,10 +178,10 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
       .update({ status: 'rejected' })
       .eq('party_id', pod.id)
       .eq('user_id', userId);
-    if (error) { alert('거절 실패: ' + error.message); return; }
+    if (error) { toast.error('거절 실패: ' + error.message); return; }
     setPendingMembers(prev => prev.filter(m => m.userId !== userId));
     haptics.light();
-    // 멤버에게 거절 알림
+    toast.info('신청을 거절했어요.');
     fetch('/api/push', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -178,12 +189,55 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
         userId,
         title: '참여 신청 거절',
         body: `${pod.departure} → ${pod.destination} 팟 참여가 거절됐어요. 예약금은 돌려받으세요.`,
-        url: '/'
+        url: `/?pod=${pod.id}`
       })
     }).catch(console.error);
   };
 
-  // Initialize Naver Map with route
+  // 팟 나가기
+  const handleLeavePod = async () => {
+    if (!user) return;
+    const { error } = await supabase
+      .from('party_members')
+      .delete()
+      .eq('party_id', pod.id)
+      .eq('user_id', user.id);
+    if (error) { toast.error('나가기 실패: ' + error.message); return; }
+
+    // 인원 감소
+    const { data: partyRow } = await supabase
+      .from('parties')
+      .select('current_member')
+      .eq('id', pod.id)
+      .single();
+    if (partyRow && partyRow.current_member > 1) {
+      await supabase.from('parties')
+        .update({ current_member: partyRow.current_member - 1 })
+        .eq('id', pod.id);
+    }
+
+    haptics.medium();
+    toast.success('팟에서 나왔어요.');
+
+    // 방장에게 알림
+    if (pod.hostId) {
+      const leaverName = user.user_metadata?.full_name || user.user_metadata?.name || '누군가';
+      fetch('/api/push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: pod.hostId,
+          title: '멤버가 나갔어요 😢',
+          body: `${leaverName}님이 ${pod.departure} → ${pod.destination} 팟에서 나갔어요.`,
+          url: `/?pod=${pod.id}`
+        })
+      }).catch(console.error);
+    }
+
+    onBack();
+  };
+
+  // Naver Map 초기화
   useEffect(() => {
     if (!hasCoords || !mapRef.current) return;
 
@@ -194,13 +248,12 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
 
         const startPos = new naver.maps.LatLng(pod.startLat, pod.startLng);
         const endPos = new naver.maps.LatLng(pod.endLat, pod.endLng);
-
         const centerLat = ((pod.startLat || 0) + (pod.endLat || 0)) / 2;
         const centerLng = ((pod.startLng || 0) + (pod.endLng || 0)) / 2;
         const center = new naver.maps.LatLng(centerLat, centerLng);
 
         const map = new naver.maps.Map(mapRef.current, {
-          center: center,
+          center,
           zoom: 12,
           mapDataControl: false,
           scaleControl: false,
@@ -210,125 +263,48 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
           scrollWheel: false,
           keyboardShortcuts: false,
           disableDoubleClickZoom: true,
-          logoControlOptions: {
-            position: naver.maps.Position.TOP_LEFT // Naver 로고를 좌측 상단으로 이동
-          }
+          logoControlOptions: { position: naver.maps.Position.TOP_LEFT }
         });
 
         const bounds = new naver.maps.LatLngBounds(startPos, endPos);
         map.fitBounds(bounds, { top: 40, right: 40, bottom: 40, left: 40 });
 
-        // Start marker (blue pin)
         new naver.maps.Marker({
-          position: startPos,
-          map: map,
+          position: startPos, map,
           icon: {
-            content: `
-              <div style="display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 3px 6px rgba(49,130,246,0.45));">
-                <div style="background:#3182F6;color:white;padding:5px 12px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap;">출발</div>
-                <div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #3182F6;margin-top:-1px;"></div>
-              </div>
-            `,
+            content: `<div style="display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 3px 6px rgba(49,130,246,0.45));"><div style="background:#3182F6;color:white;padding:5px 12px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap;">출발</div><div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #3182F6;margin-top:-1px;"></div></div>`,
             anchor: new naver.maps.Point(25, 37)
           }
         });
 
-        // End marker (orange pin)
         new naver.maps.Marker({
-          position: endPos,
-          map: map,
+          position: endPos, map,
           icon: {
-            content: `
-              <div style="display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 3px 6px rgba(255,165,0,0.45));">
-                <div style="background:#FFA500;color:white;padding:5px 12px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap;">도착</div>
-                <div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #FFA500;margin-top:-1px;"></div>
-              </div>
-            `,
+            content: `<div style="display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 3px 6px rgba(255,165,0,0.45));"><div style="background:#FFA500;color:white;padding:5px 12px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap;">도착</div><div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #FFA500;margin-top:-1px;"></div></div>`,
             anchor: new naver.maps.Point(25, 37)
           }
         });
 
-        // Fetch real road route from Directions API
         try {
-          const res = await fetch(
-            `/api/directions?startLat=${pod.startLat}&startLng=${pod.startLng}&endLat=${pod.endLat}&endLng=${pod.endLng}`
-          );
+          const res = await fetch(`/api/directions?startLat=${pod.startLat}&startLng=${pod.startLng}&endLat=${pod.endLat}&endLng=${pod.endLng}`);
           const data = await res.json();
-
-          console.log('[Directions API response]', data);
-
           if (data.path && data.path.length > 0) {
-            // Draw real road route with gradient-like or solid bold style
-            const routePath = data.path.map(
-              (coord: number[]) => new naver.maps.LatLng(coord[1], coord[0]) // [lng, lat] -> LatLng(lat, lng)
-            );
-
-            // 외곽선 그림자 라인
-            new naver.maps.Polyline({
-              map: map,
-              path: routePath,
-              strokeColor: '#1a56c4',
-              strokeWeight: 10,
-              strokeOpacity: 0.25,
-              strokeLineCap: 'round',
-              strokeLineJoin: 'round',
-            });
-
-            // 메인 경로 라인
-            new naver.maps.Polyline({
-              map: map,
-              path: routePath,
-              strokeColor: '#3182F6',
-              strokeWeight: 7,
-              strokeOpacity: 1,
-              strokeLineCap: 'round',
-              strokeLineJoin: 'round',
-            });
-
-            // Re-fit bounds to include the route with some padding
+            const routePath = data.path.map((coord: number[]) => new naver.maps.LatLng(coord[1], coord[0]));
+            new naver.maps.Polyline({ map, path: routePath, strokeColor: '#1a56c4', strokeWeight: 10, strokeOpacity: 0.25, strokeLineCap: 'round', strokeLineJoin: 'round' });
+            new naver.maps.Polyline({ map, path: routePath, strokeColor: '#3182F6', strokeWeight: 7, strokeOpacity: 1, strokeLineCap: 'round', strokeLineJoin: 'round' });
             const routeBounds = new naver.maps.LatLngBounds();
             routePath.forEach((p: any) => routeBounds.extend(p));
             map.fitBounds(routeBounds, { top: 60, right: 40, bottom: 40, left: 40 });
-
-            // Update taxi fare if available from API
-            if (data.taxiFare && data.taxiFare > 0) {
-              setRealTaxiFare(data.taxiFare);
-            }
-            if (data.duration) {
-              setRouteDuration(Math.round(data.duration / 60000));
-            }
-            if (data.distance) {
-              setRouteDistance(Math.round(data.distance / 100) / 10); // m → km (소수점 1자리)
-            }
-            setMapLoading(false);
+            if (data.taxiFare && data.taxiFare > 0) setRealTaxiFare(data.taxiFare);
+            if (data.duration) setRouteDuration(Math.round(data.duration / 60000));
+            if (data.distance) setRouteDistance(Math.round(data.distance / 100) / 10);
           } else {
-            new naver.maps.Polyline({
-              map: map,
-              path: [startPos, endPos],
-              strokeColor: '#1E5BBF',
-              strokeWeight: 4,
-              strokeOpacity: 0.8,
-              strokeStyle: 'shortdash',
-              strokeLineCap: 'round',
-              strokeLineJoin: 'round',
-            });
-            setMapLoading(false);
+            new naver.maps.Polyline({ map, path: [startPos, endPos], strokeColor: '#1E5BBF', strokeWeight: 4, strokeOpacity: 0.8, strokeStyle: 'shortdash', strokeLineCap: 'round', strokeLineJoin: 'round' });
           }
-        } catch (dirErr) {
-          console.error('[Directions API fetch error]', dirErr);
-          new naver.maps.Polyline({
-            map: map,
-            path: [startPos, endPos],
-            strokeColor: '#1E5BBF',
-            strokeWeight: 4,
-            strokeOpacity: 0.8,
-            strokeStyle: 'shortdash',
-            strokeLineCap: 'round',
-            strokeLineJoin: 'round',
-          });
-          setMapLoading(false);
+        } catch {
+          new naver.maps.Polyline({ map, path: [startPos, endPos], strokeColor: '#1E5BBF', strokeWeight: 4, strokeOpacity: 0.8, strokeStyle: 'shortdash', strokeLineCap: 'round', strokeLineJoin: 'round' });
         }
-
+        setMapLoading(false);
       } catch (e) {
         console.error('Pod detail map error:', e);
       }
@@ -342,12 +318,8 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
         let attempts = 0;
         const interval = setInterval(() => {
           attempts++;
-          if ((window as any).naver?.maps) {
-            clearInterval(interval);
-            initMap();
-          } else if (attempts > 20) {
-            clearInterval(interval);
-          }
+          if ((window as any).naver?.maps) { clearInterval(interval); initMap(); }
+          else if (attempts > 20) clearInterval(interval);
         }, 300);
       }
     }, 300);
@@ -355,7 +327,7 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
     return () => clearTimeout(timer);
   }, [hasCoords, pod.startLat, pod.startLng, pod.endLat, pod.endLng]);
 
-  // Fetch comments
+  // 댓글 구독
   useEffect(() => {
     const fetchComments = async () => {
       const { data } = await supabase
@@ -363,7 +335,6 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
         .select('*, user:users(nickname, avatar_url)')
         .eq('party_id', pod.id)
         .order('created_at', { ascending: true });
-
       if (data) {
         setComments(data.map((c: any) => ({
           id: c.id,
@@ -375,23 +346,12 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
         })));
       }
     };
-
     fetchComments();
 
     const channel = supabase
       .channel(`comments-${pod.id}`)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'comments',
-        filter: `party_id=eq.${pod.id}`
-      }, async (payload: any) => {
-        const { data: userData } = await supabase
-          .from('users')
-          .select('nickname, avatar_url')
-          .eq('id', payload.new.user_id)
-          .single();
-
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'comments', filter: `party_id=eq.${pod.id}` }, async (payload: any) => {
+        const { data: userData } = await supabase.from('users').select('nickname, avatar_url').eq('id', payload.new.user_id).single();
         setComments(prev => [...prev, {
           id: payload.new.id,
           userId: payload.new.user_id,
@@ -424,21 +384,12 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
     if (!commentInput.trim() || !user || isSendingComment) return;
     setIsSendingComment(true);
     const message = commentInput.trim();
-    const { error } = await supabase.from('comments').insert({
-      party_id: pod.id,
-      user_id: user.id,
-      message
-    });
+    const { error } = await supabase.from('comments').insert({ party_id: pod.id, user_id: user.id, message });
     if (!error) {
       setCommentInput('');
-      // 본인 제외 참여자 전원에게 댓글 알림
       const senderName = user.user_metadata?.full_name || user.user_metadata?.name || '누군가';
-      const targets = approvedParticipants
-        .filter(p => p.id !== user.id)
-        .map(p => p.id);
-      if (pod.hostId && pod.hostId !== user.id && !targets.includes(pod.hostId)) {
-        targets.push(pod.hostId);
-      }
+      const targets = approvedParticipants.filter(p => p.id !== user.id).map(p => p.id);
+      if (pod.hostId && pod.hostId !== user.id && !targets.includes(pod.hostId)) targets.push(pod.hostId);
       targets.forEach(targetId => {
         fetch('/api/push', {
           method: 'POST',
@@ -447,7 +398,7 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
             userId: targetId,
             title: `💬 ${senderName}님의 댓글`,
             body: message.length > 40 ? message.slice(0, 40) + '…' : message,
-            url: '/'
+            url: `/?pod=${pod.id}`
           })
         }).catch(console.error);
       });
@@ -457,37 +408,24 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
   };
 
   const togglePaidStatus = async (participantId: string) => {
-    // 1. 낙관적 UI 업데이트
     const newStatus = !participantsPaidStatus[participantId];
-    setParticipantsPaidStatus(prev => ({
-      ...prev,
-      [participantId]: newStatus
-    }));
+    setParticipantsPaidStatus(prev => ({ ...prev, [participantId]: newStatus }));
     haptics.light();
-
-    // 2. DB 업데이트
     const { error } = await supabase
       .from('party_members')
       .update({ status: newStatus ? 'paid' : 'joined' })
       .eq('party_id', pod.id)
       .eq('user_id', participantId);
-
-    // 3. 실패 시 롤백
     if (error) {
-      console.error('Failed to update paid status:', error);
-      setParticipantsPaidStatus(prev => ({
-        ...prev,
-        [participantId]: !newStatus
-      }));
-      alert('송금 상태 변경에 실패했습니다.');
+      setParticipantsPaidStatus(prev => ({ ...prev, [participantId]: !newStatus }));
+      toast.error('송금 상태 변경에 실패했습니다.');
     }
   };
 
   const handleJoinClick = () => {
-    if (!user) { alert('로그인이 필요합니다.'); return; }
-    // Check if already a member
-    const isMember = pod.participants.some(p => p.id === user?.id);
-    if (isMember) { alert('이미 참여한 팟입니다.'); return; }
+    if (!user) { toast.error('로그인이 필요합니다.'); return; }
+    const isMemberCheck = pod.participants.some(p => p.id === user?.id);
+    if (isMemberCheck) { toast.info('이미 참여한 팟입니다.'); return; }
     setShowPaymentModal(true);
     haptics.light();
   };
@@ -498,27 +436,75 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
   };
 
   const handleCancelPod = async () => {
-    if (!window.confirm('정말 이 팟을 취소(폭파)하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) return;
-    
     haptics.heavy();
-    const { error, status, statusText } = await supabase
-      .from("parties")
-      .update({ status: "cancelled" })
-      .eq("id", pod.id)
-      .eq("host_id", user.id);
+    const { error } = await supabase
+      .from('parties')
+      .update({ status: 'cancelled' })
+      .eq('id', pod.id)
+      .eq('host_id', user.id);
 
     if (error) {
-      console.error("팟 취소 실패:", error, status, statusText);
-      alert(`팟 취소에 실패했습니다: ${error.message} (코드: ${status})`);
+      toast.error(`팟 취소에 실패했습니다: ${error.message}`);
     } else {
-      alert("팟이 성공적으로 취소되었습니다. 🎉");
-      onBack(); // 메인 화면으로 돌아가기
+      toast.success('팟이 취소되었습니다.');
+      // 모든 멤버에게 알림
+      approvedParticipants.forEach(p => {
+        if (p.id === user.id) return;
+        fetch('/api/push', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: p.id,
+            title: '팟이 폭파됐어요 💥',
+            body: `${pod.departure} → ${pod.destination} 팟이 방장에 의해 취소되었습니다.`,
+            url: '/'
+          })
+        }).catch(console.error);
+      });
+      onBack();
     }
+  };
+
+  const handleCompletePod = async () => {
+    haptics.success();
+    const { error } = await supabase
+      .from('parties')
+      .update({ status: 'completed' })
+      .eq('id', pod.id)
+      .eq('host_id', user.id);
+    if (error) {
+      toast.error(`이용 완료 처리에 실패했습니다: ${error.message}`);
+    } else {
+      toast.success('이용 완료 처리되었습니다! 🎉');
+      onBack();
+    }
+  };
+
+  // 칭찬하기
+  const handlePraise = async (targetId: string, targetName: string) => {
+    if (!user) return;
+    const { error } = await supabase.from('praises').insert({
+      praiser_id: user.id,
+      praised_user_id: targetId,
+      party_id: pod.id
+    });
+    if (error?.code === '23505') {
+      toast.info('이미 칭찬한 멤버입니다.');
+      return;
+    }
+    if (error) { toast.error('칭찬 전송 실패'); return; }
+
+    // 매너온도 +0.5
+    await supabase.rpc('increment_manner_score', { target_user_id: targetId, delta: 0.5 });
+    toast.success(`${targetName}님을 칭찬했어요! 👍`);
+    haptics.success();
   };
 
   const myParticipation = user ? pod.participants.find(p => p.id === user.id) : null;
   const isMember = !!myParticipation && myParticipation.memberStatus !== 'pending';
   const isPending = !!myParticipation && myParticipation.memberStatus === 'pending';
+
+  const genderLabel = pod.genderFilter === 'male' ? '남성 전용' : pod.genderFilter === 'female' ? '여성 전용' : null;
 
   return (
     <motion.div
@@ -532,18 +518,22 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
       <header className="sticky top-0 bg-white z-[11] px-6 py-4 flex items-center gap-3 border-b border-gray-100" style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <button
           onClick={() => { haptics.light(); onBack(); }}
-          className="w-10 h-10 rounded-full bg-[#F2F4F6] flex items-center justify-center active:scale-95 transition-transform mt-[max(5px, env(safe-area-inset-top))]"
+          className="w-10 h-10 rounded-full bg-[#F2F4F6] flex items-center justify-center active:scale-95 transition-transform mt-[max(5px,env(safe-area-inset-top))]"
         >
           <ArrowLeft className="w-5 h-5 text-gray-700" />
         </button>
         <h1 className="text-xl font-bold text-[#191F28]">팟 상세</h1>
+        {genderLabel && (
+          <span className={`ml-auto text-xs font-bold px-2.5 py-1 rounded-full ${pod.genderFilter === 'female' ? 'bg-pink-100 text-pink-600' : 'bg-blue-100 text-blue-600'}`}>
+            {genderLabel}
+          </span>
+        )}
       </header>
 
       <div className="px-6 py-6 space-y-6" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 120px)' }}>
-        {/* Interactive Map */}
+        {/* 지도 */}
         {hasCoords ? (
           <div className="relative rounded-3xl overflow-hidden h-56 bg-gray-100 z-0">
-            {/* 스켈레톤 로딩 */}
             {mapLoading && (
               <div className="absolute inset-0 bg-gray-200 z-10 flex items-center justify-center">
                 <div className="flex flex-col items-center gap-2">
@@ -553,7 +543,6 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
               </div>
             )}
             <div ref={mapRef} className="w-full h-full" />
-            {/* 소요시간/거리 오버레이 */}
             {!mapLoading && (routeDuration || routeDistance) && (
               <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-2 z-10">
                 {routeDuration && (
@@ -580,21 +569,15 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
           </div>
         )}
 
-        {/* Route Info */}
+        {/* 여정 정보 */}
         <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 relative z-10">
           <h2 className="text-sm font-semibold text-gray-400 mb-5 tracking-wide">여정 정보</h2>
-          
           <div className="relative pl-3">
-            {/* 세로 연결 선 (점선 스타일) */}
             <div className="absolute left-[7px] top-[24px] bottom-[24px] w-[2px] bg-gray-200 border-l-[2px] border-dashed border-gray-300"></div>
-            
-            {/* 출발지 */}
             <div className="relative mb-8 flex items-start">
               <div className="absolute -left-3 top-1 w-4 h-4 rounded-full bg-[#3182F6] shadow-[0_0_0_4px_rgba(49,130,246,0.15)] z-10"></div>
               <div className="ml-6 flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs font-bold text-[#3182F6] bg-blue-50 px-2 py-0.5 rounded-md">출발</span>
-                </div>
+                <span className="text-xs font-bold text-[#3182F6] bg-blue-50 px-2 py-0.5 rounded-md">출발</span>
                 <p className="font-bold text-[#191F28] text-[1.1rem] leading-tight mt-1">{pod.departure}</p>
                 {pod.departureDetail && (
                   <div className="flex items-center gap-1 mt-1.5 bg-gray-50 rounded-lg px-2.5 py-1.5 w-fit">
@@ -604,26 +587,19 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
                 )}
               </div>
             </div>
-
-            {/* 도착지 */}
             <div className="relative flex items-start">
               <div className="absolute -left-3 top-1 w-4 h-4 rounded-full bg-[#FFA500] shadow-[0_0_0_4px_rgba(255,165,0,0.15)] z-10"></div>
               <div className="ml-6 flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs font-bold text-[#FFA500] bg-orange-50 px-2 py-0.5 rounded-md">도착</span>
-                </div>
+                <span className="text-xs font-bold text-[#FFA500] bg-orange-50 px-2 py-0.5 rounded-md">도착</span>
                 <p className="font-bold text-[#191F28] text-[1.1rem] leading-tight mt-1">{pod.destination}</p>
               </div>
             </div>
           </div>
-
-          <div className="mt-6 pt-5 border-t border-gray-100 flex items-center justify-between">
-            <div className="flex items-center gap-2 text-[#191F28]">
-              <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
-                <Clock className="w-4 h-4 text-gray-600" />
-              </div>
-              <span className="font-bold text-[15px]">{pod.departureTime} 출발</span>
+          <div className="mt-6 pt-5 border-t border-gray-100 flex items-center gap-2 text-[#191F28]">
+            <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+              <Clock className="w-4 h-4 text-gray-600" />
             </div>
+            <span className="font-bold text-[15px]">{pod.departureTime} 출발</span>
           </div>
         </div>
 
@@ -643,7 +619,7 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
                     onClick={() => {
                       navigator.clipboard.writeText(pod.hostBankAccount || '');
                       haptics.medium();
-                      alert('계좌번호가 복사됐어요!');
+                      toast.success('계좌번호가 복사됐어요!');
                     }}
                     className="mt-2 text-xs bg-amber-200 text-amber-900 px-3 py-1.5 rounded-full font-semibold"
                   >
@@ -665,24 +641,12 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
                   {m.avatar ? (
                     <img src={m.avatar} alt={m.name} className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
                   ) : (
-                    <div className="w-10 h-10 rounded-full bg-amber-400 flex items-center justify-center text-white font-bold flex-shrink-0">
-                      {m.name.charAt(0)}
-                    </div>
+                    <div className="w-10 h-10 rounded-full bg-amber-400 flex items-center justify-center text-white font-bold flex-shrink-0">{m.name.charAt(0)}</div>
                   )}
                   <span className="text-sm font-semibold text-[#191F28] flex-1">{m.name}</span>
                   <div className="flex gap-2">
-                    <button
-                      onClick={() => handleRejectMember(m.userId)}
-                      className="px-3 py-1.5 rounded-full text-xs font-semibold bg-red-100 text-red-600"
-                    >
-                      거절
-                    </button>
-                    <button
-                      onClick={() => handleApproveMember(m.userId)}
-                      className="px-3 py-1.5 rounded-full text-xs font-semibold bg-green-100 text-green-700"
-                    >
-                      승인
-                    </button>
+                    <button onClick={() => handleRejectMember(m.userId)} className="px-3 py-1.5 rounded-full text-xs font-semibold bg-red-100 text-red-600">거절</button>
+                    <button onClick={() => handleApproveMember(m.userId)} className="px-3 py-1.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">승인</button>
                   </div>
                 </div>
               ))}
@@ -690,7 +654,7 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
           </div>
         )}
 
-        {/* Participants */}
+        {/* 참여자 */}
         <div className="bg-[#F2F4F6] rounded-3xl p-6">
           <h2 className="text-sm font-semibold text-gray-600 mb-4">참여자</h2>
           <div className="space-y-3">
@@ -699,11 +663,11 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
                 {participant.avatar ? (
                   <img src={participant.avatar} alt={participant.name} className="w-12 h-12 rounded-full border border-gray-200 flex-shrink-0 object-cover" />
                 ) : (
-                  <div className="w-12 h-12 rounded-full bg-[#3182F6] flex items-center justify-center text-white font-bold flex-shrink-0">
-                    {participant.name.charAt(0)}
-                  </div>
+                  <div className="w-12 h-12 rounded-full bg-[#3182F6] flex items-center justify-center text-white font-bold flex-shrink-0">{participant.name.charAt(0)}</div>
                 )}
                 <span className="text-sm font-semibold text-[#191F28] flex-1">{participant.name}</span>
+
+                {/* 방장 전용: 재촉 + 송금 토글 */}
                 {isHost && (
                   <div className="flex items-center gap-1.5">
                     {!participantsPaidStatus[participant.id] && (
@@ -717,29 +681,41 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
                               userId: participant.id,
                               title: '💸 송금 잊으셨나요?',
                               body: `${pod.departure} → ${pod.destination} 팟 택시비 송금을 까먹으신 건 아닌가요?`,
-                              url: '/'
+                              url: `/?pod=${pod.id}`
                             })
-                          }).then(() => alert(`${participant.name}님에게 재촉 알림을 보냈어요!`))
-                            .catch(() => alert('알림 전송에 실패했어요.'));
+                          }).then(() => toast.success(`${participant.name}님에게 재촉 알림을 보냈어요!`))
+                            .catch(() => toast.error('알림 전송에 실패했어요.'));
                         }}
                         className="px-2.5 py-1.5 rounded-full text-xs font-medium bg-orange-100 text-orange-600 hover:bg-orange-200 transition-colors"
                       >
-                        재촉하기
+                        재촉
                       </button>
                     )}
                     <button
                       onClick={() => togglePaidStatus(participant.id)}
-                      className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                        participantsPaidStatus[participant.id]
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-gray-100 text-gray-600'
-                      }`}
+                      className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${participantsPaidStatus[participant.id] ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}
                     >
-                      {participantsPaidStatus[participant.id] ? (
-                        <><Check className="w-3 h-3" /><span>송금완료</span></>
-                      ) : (
-                        <span>미송금</span>
-                      )}
+                      {participantsPaidStatus[participant.id] ? <><Check className="w-3 h-3" /><span>송금완료</span></> : <span>미송금</span>}
+                    </button>
+                  </div>
+                )}
+
+                {/* 일반 멤버: 자기 자신이 아닌 경우에 칭찬/신고 */}
+                {!isHost && user && participant.id !== user.id && (
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={() => handlePraise(participant.id, participant.name)}
+                      className="p-1.5 rounded-full bg-yellow-50 text-yellow-500 hover:bg-yellow-100 transition-colors"
+                      title="칭찬하기"
+                    >
+                      <ThumbsUp className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => setReportTarget({ userId: participant.id, userName: participant.name })}
+                      className="p-1.5 rounded-full bg-red-50 text-red-400 hover:bg-red-100 transition-colors"
+                      title="신고하기"
+                    >
+                      <Flag className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 )}
@@ -756,7 +732,7 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
           </div>
         </div>
 
-        {/* Estimated Cost */}
+        {/* 예상 비용 */}
         <div className="bg-[#F2F4F6] rounded-3xl p-6">
           <h2 className="text-sm font-semibold text-gray-600 mb-4">예상 비용</h2>
           <div className="space-y-2">
@@ -782,7 +758,7 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
           )}
         </div>
 
-        {/* Host Bank Account and Comments Combined */}
+        {/* 계좌 + 댓글 */}
         {(pod.hostBankAccount || user) && (
           <div className="bg-[#F2F4F6] rounded-3xl p-6">
             {pod.hostBankAccount && (
@@ -797,7 +773,6 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
                 </div>
               </div>
             )}
-
             <div className="flex items-center gap-2 mb-4">
               <MessageCircle className="w-5 h-5 text-gray-600" />
               <h2 className="text-sm font-semibold text-gray-600">댓글 {comments.length > 0 && `(${comments.length})`}</h2>
@@ -816,9 +791,7 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
                         {msg.userAvatar ? (
                           <img src={msg.userAvatar} alt={msg.userName} className="w-6 h-6 rounded-full" />
                         ) : (
-                          <div className="w-6 h-6 rounded-full bg-[#3182F6] flex items-center justify-center text-white text-xs font-bold">
-                            {msg.userName.charAt(0)}
-                          </div>
+                          <div className="w-6 h-6 rounded-full bg-[#3182F6] flex items-center justify-center text-white text-xs font-bold">{msg.userName.charAt(0)}</div>
                         )}
                         <span className="font-semibold text-sm text-[#191F28]">{msg.userName}</span>
                       </div>
@@ -854,7 +827,7 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
         )}
       </div>
 
-      {/* Bottom action button */}
+      {/* 하단 버튼 */}
       {!isHost && !isMember && !isPending && (
         <div className="fixed bottom-0 left-0 right-0 p-6 bg-white border-t border-gray-100" style={{ maxWidth: '480px', margin: '0 auto' }}>
           <Button
@@ -880,8 +853,14 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
       )}
 
       {isMember && !isHost && (
-        <div className="fixed bottom-0 left-0 right-0 p-6 bg-white border-t border-gray-100" style={{ maxWidth: '480px', margin: '0 auto' }}>
-          <Button disabled className="w-full bg-gray-200 text-gray-500 rounded-full py-6 text-lg font-bold cursor-not-allowed">
+        <div className="fixed bottom-0 left-0 right-0 p-6 bg-white border-t border-gray-100 flex gap-3" style={{ maxWidth: '480px', margin: '0 auto' }}>
+          <Button
+            onClick={() => setShowLeaveConfirm(true)}
+            className="flex-none bg-gray-100 text-gray-500 hover:bg-gray-200 rounded-full py-6 px-5 font-bold transition-colors"
+          >
+            <LogOut className="w-5 h-5" />
+          </Button>
+          <Button disabled className="flex-1 bg-gray-200 text-gray-500 rounded-full py-6 text-lg font-bold cursor-not-allowed">
             참여 완료 ✅
           </Button>
         </div>
@@ -889,30 +868,10 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
 
       {isHost && (
         <div className="fixed bottom-0 left-0 right-0 p-6 bg-white border-t border-gray-100 flex gap-2" style={{ maxWidth: '480px', margin: '0 auto' }}>
-          <Button 
-            onClick={handleCancelPod}
-            className="flex-1 bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-600 rounded-full py-6 text-lg font-bold transition-colors"
-          >
-            취소하기 (폭파)
+          <Button onClick={() => setShowCancelConfirm(true)} className="flex-1 bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-600 rounded-full py-6 text-lg font-bold transition-colors">
+            취소(폭파)
           </Button>
-          <Button 
-            onClick={async () => {
-              if (!window.confirm('이 팟의 이용을 완료하시겠습니까? 완료 시 마이페이지에서 다시 만들 수 있습니다.')) return;
-              haptics.success();
-              const { error } = await supabase
-                .from("parties")
-                .update({ status: "completed" })
-                .eq("id", pod.id)
-                .eq("host_id", user.id);
-              if (error) {
-                alert(`이용 완료 처리에 실패했습니다: ${error.message}`);
-              } else {
-                alert("이용 완료 처리되었습니다! 🎉");
-                onBack();
-              }
-            }}
-            className="flex-1 bg-[#3182F6] text-white hover:bg-[#2968C8] rounded-full py-6 text-lg font-bold transition-colors"
-          >
+          <Button onClick={() => setShowCompleteConfirm(true)} className="flex-1 bg-[#3182F6] text-white hover:bg-[#2968C8] rounded-full py-6 text-lg font-bold transition-colors">
             이용 완료
           </Button>
         </div>
@@ -926,6 +885,66 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
         hostName={pod.hostName || pod.participants[0]?.name || '방장'}
         accountNumber={pod.hostBankAccount}
       />
+
+      {/* 팟 취소 확인 */}
+      <AlertDialog open={showCancelConfirm} onOpenChange={setShowCancelConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>팟을 취소할까요?</AlertDialogTitle>
+            <AlertDialogDescription>
+              팟을 폭파하면 모든 멤버에게 취소 알림이 전송됩니다. 이 작업은 되돌릴 수 없습니다.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>아니요</AlertDialogCancel>
+            <AlertDialogAction onClick={handleCancelPod} className="bg-red-500 hover:bg-red-600">폭파하기</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* 이용 완료 확인 */}
+      <AlertDialog open={showCompleteConfirm} onOpenChange={setShowCompleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>이용을 완료할까요?</AlertDialogTitle>
+            <AlertDialogDescription>
+              완료 처리 후에는 마이페이지에서 이 팟을 다시 만들 수 있습니다.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>아니요</AlertDialogCancel>
+            <AlertDialogAction onClick={handleCompletePod} className="bg-[#3182F6] hover:bg-[#2968C8]">완료하기</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* 팟 나가기 확인 */}
+      <AlertDialog open={showLeaveConfirm} onOpenChange={setShowLeaveConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>팟에서 나갈까요?</AlertDialogTitle>
+            <AlertDialogDescription>
+              팟을 나가면 방장에게 알림이 전송됩니다. 다시 참여하려면 재신청해야 합니다.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction onClick={handleLeavePod} className="bg-gray-500 hover:bg-gray-600">나가기</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* 신고 모달 */}
+      {reportTarget && (
+        <ReportModal
+          isOpen={!!reportTarget}
+          onClose={() => setReportTarget(null)}
+          reportedUserId={reportTarget.userId}
+          reportedUserName={reportTarget.userName}
+          partyId={pod.id}
+          reporterId={user?.id}
+        />
+      )}
     </motion.div>
   );
 }

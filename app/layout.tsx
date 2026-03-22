@@ -1,6 +1,7 @@
 import './globals.css';
 import type { Metadata } from 'next';
 import Script from 'next/script';
+import { Toaster } from '@/components/ui/sonner';
 
 export const metadata: Metadata = {
   title: '탈래말래?',
@@ -46,6 +47,7 @@ export default function RootLayout({
           src={`https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${process.env.NEXT_PUBLIC_NAVER_CLIENT_ID}&submodules=geocoder`}
         />
         {children}
+        <Toaster position="top-center" richColors />
       </body>
     </html>
   );

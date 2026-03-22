@@ -13,8 +13,10 @@ import { SearchScreen } from '@/components/search-screen';
 import { PushGuideSheet } from '@/components/push-guide-sheet';
 import { PodListSkeleton, LivePodsSkeleton } from '@/components/loading-skeleton';
 import { GenderOnboarding } from '@/components/gender-onboarding';
+import { OnboardingGuide } from '@/components/onboarding-guide';
 import { haptics } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
+import { toast } from 'sonner';
 
 // Haversine distance in km
 function getDistanceKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -134,6 +136,22 @@ export default function Home() {
 
     fetchPods();
 
+    // 딥링크: ?pod=ID 처리
+    const params = new URLSearchParams(window.location.search);
+    const podIdParam = params.get('pod');
+    if (podIdParam) {
+      setSelectedPodId(podIdParam);
+      window.history.replaceState({}, '', '/');
+    }
+
+    // 실시간 팟 업데이트 구독
+    const realtimeChannel = supabase
+      .channel('parties-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'parties' }, () => {
+        fetchPods();
+      })
+      .subscribe();
+
     // 2. 위치 기반 맞춤 인사말을 위한 Geolocation 호출
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -170,7 +188,10 @@ export default function Home() {
       );
     }
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+      supabase.removeChannel(realtimeChannel);
+    };
   }, []);
 
   const handleKakaoLogin = async () => {
@@ -185,7 +206,7 @@ export default function Home() {
 
   const handleCreatePod = async (data: any) => {
     if (!user) {
-      alert('로그인이 필요합니다.');
+      toast.error('로그인이 필요합니다.');
       return;
     }
 
@@ -212,7 +233,7 @@ export default function Home() {
 
     if (error) {
       console.error('Error creating pod:', error);
-      alert('팟 생성 중 오류가 발생했습니다.');
+      toast.error('팟 생성 중 오류가 발생했습니다.');
       return;
     }
 
@@ -417,26 +438,27 @@ export default function Home() {
           initialData={createPodInitialData}
         />
 
-        <GenderOnboarding 
-          user={user} 
-          onComplete={(gender) => setUserGender(gender)} 
+        <GenderOnboarding
+          user={user}
+          onComplete={(gender) => setUserGender(gender)}
         />
+        <OnboardingGuide />
 
         {selectedPod && (
           <PodDetail
             pod={selectedPod}
             onBack={() => setSelectedPodId(null)}
             onJoin={async () => {
-              if (!user) { alert('로그인이 필요합니다.'); return; }
+              if (!user) { toast.error('로그인이 필요합니다.'); return; }
 
               // 성별 필터 체크
               if (selectedPod.genderFilter !== 'any') {
                 if (!userGender) {
-                  alert('성별 정보가 없어 참여할 수 없습니다. 새로고침 후 성별을 설정해주세요.');
+                  toast.error('성별 정보가 없어 참여할 수 없습니다. 새로고침 후 성별을 설정해주세요.');
                   return;
                 }
                 if (selectedPod.genderFilter !== userGender) {
-                  alert(selectedPod.genderFilter === 'male' ? '남자만 참여할 수 있는 팟입니다.' : '여자만 참여할 수 있는 팟입니다.');
+                  toast.error(selectedPod.genderFilter === 'male' ? '남자만 참여할 수 있는 팟입니다.' : '여자만 참여할 수 있는 팟입니다.');
                   return;
                 }
               }
@@ -448,7 +470,7 @@ export default function Home() {
                 .eq('id', selectedPod.id)
                 .single();
               if (!party || party.current_member >= party.max_member) {
-                alert('이미 자리가 다 찼습니다!');
+                toast.error('이미 자리가 다 찼습니다!');
                 return;
               }
 
@@ -460,7 +482,7 @@ export default function Home() {
                 .eq('user_id', user.id)
                 .maybeSingle();
               if (existing && existing.status !== 'rejected') {
-                alert('이미 참여한 팟입니다.');
+                toast.info('이미 참여한 팟입니다.');
                 return;
               }
 
@@ -479,7 +501,7 @@ export default function Home() {
                     status: memberStatus
                   });
               if (joinErr) {
-                alert('참여 실패: ' + joinErr.message);
+                toast.error('참여 실패: ' + joinErr.message);
                 return;
               }
 
@@ -493,8 +515,7 @@ export default function Home() {
               // 성공 처리
               haptics.success();
               if (isDepositPod) {
-                alert('참여 신청이 완료됐습니다! 방장이 송금 확인 후 승인해드릴 거예요 🙏');
-                // 방장에게만 알림
+                toast.success('참여 신청 완료! 방장이 송금 확인 후 승인해드릴 거예요 🙏');
                 if (selectedPod.hostId) {
                   fetch('/api/push', {
                     method: 'POST',
@@ -503,13 +524,12 @@ export default function Home() {
                       userId: selectedPod.hostId,
                       title: '새 참여 신청 💰',
                       body: `${user.user_metadata?.full_name || user?.user_metadata?.name || '누군가'}님이 예약금을 보내고 참여 신청했어요!`,
-                      url: '/'
+                      url: `/?pod=${selectedPod.id}`
                     })
                   }).catch(console.error);
                 }
               } else {
-                alert('팟에 참여했습니다! 🎉');
-                // 방장 + 기존 멤버에게 알림
+                toast.success('팟에 참여했습니다! 🎉');
                 const notifyUsers = selectedPod.participants.map((p: any) => p.id);
                 if (selectedPod.hostId && !notifyUsers.includes(selectedPod.hostId)) {
                   notifyUsers.push(selectedPod.hostId);
@@ -523,7 +543,7 @@ export default function Home() {
                       userId: targetId,
                       title: '새로운 참여자 🎉',
                       body: `${user.user_metadata?.full_name || user?.user_metadata?.name || '누군가'}님이 팟에 참여했습니다!`,
-                      url: '/'
+                      url: `/?pod=${selectedPod.id}`
                     })
                   }).catch(console.error);
                 });

@@ -14,6 +14,7 @@ interface Pod {
   departureTime: string;
   status: 'recruiting' | 'full' | string;
   estimatedCost?: number;
+  genderFilter?: string;
 }
 
 interface PodListProps {
@@ -49,10 +50,16 @@ export function PodList({ pods, onPodClick }: PodListProps) {
         >
           <div className="flex items-start justify-between mb-4">
             <div className="flex-1">
-              <div className="flex items-center gap-3 mb-2">
+              <div className="flex items-center gap-3 mb-2 flex-wrap">
                 <span className="font-bold text-lg text-[#191F28]">{pod.departure}</span>
                 <ArrowRight className="w-5 h-5 text-gray-400" />
                 <span className="font-bold text-lg text-[#191F28]">{pod.destination}</span>
+                {pod.genderFilter === 'female' && (
+                  <span className="text-xs font-bold bg-pink-100 text-pink-600 px-2 py-0.5 rounded-full">여성 전용</span>
+                )}
+                {pod.genderFilter === 'male' && (
+                  <span className="text-xs font-bold bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">남성 전용</span>
+                )}
               </div>
               <div className="flex items-center gap-2 text-[#FFA500] font-medium">
                 <Clock className="w-4 h-4" />

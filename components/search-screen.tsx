@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { haptics } from '@/lib/haptics';
 import { shortenAddress } from '@/components/map-selector';
+import { toast } from 'sonner';
 
 interface Pod {
   id: string;
@@ -77,47 +78,36 @@ function directionSimilarity(
  *   예) 오송→인천 팟 + 오송→서울역 사용자 → 서울역에서 중간 하차
  */
 function isRouteCompatible(
-  uDepLat: number, uDepLng: number,   // 사용자 출발지
-  uDestLat: number, uDestLng: number, // 사용자 목적지
-  pDepLat: number, pDepLng: number,   // 팟 출발지
-  pDestLat: number, pDestLng: number  // 팟 목적지
-): boolean {
-  // 팟 출발지가 사용자 출발지에서 10km 이내여야 함
-  if (getDistKm(uDepLat, uDepLng, pDepLat, pDepLng) > 10) return false;
-
-  // 방향이 반대면 제외 (코사인 유사도 0 미만 = 90도 초과)
+  uDepLat: number, uDepLng: number,
+  uDestLat: number, uDestLng: number,
+  pDepLat: number, pDepLng: number,
+  pDestLat: number, pDestLng: number
+): 'case-a' | 'case-b' | null {
+  if (getDistKm(uDepLat, uDepLng, pDepLat, pDepLng) > 10) return null;
   if (directionSimilarity(uDepLat, uDepLng, uDestLat, uDestLng,
-                          pDepLat, pDepLng, pDestLat, pDestLng) < 0) return false;
+                          pDepLat, pDepLng, pDestLat, pDestLng) < 0) return null;
 
   const totalUserDist = getDistKm(uDepLat, uDepLng, uDestLat, uDestLng);
-  // 허용 오차: 경로 길이의 15% 또는 최소 5km
   const threshold = Math.max(5, totalUserDist * 0.15);
 
-  // 케이스 A: 팟 도착지가 사용자 경로 선분 위에 있음
-  const podEndOnUserRoute = pointToSegmentDistKm(
-    pDestLat, pDestLng,
-    uDepLat, uDepLng, uDestLat, uDestLng
-  ) < threshold;
-  // + 팟이 최소 20% 이상 커버
+  // 케이스 A: 팟 도착지가 내 경로 위 → 환승
+  const podEndOnUserRoute = pointToSegmentDistKm(pDestLat, pDestLng, uDepLat, uDepLng, uDestLat, uDestLng) < threshold;
   const podCoverageA = getDistKm(uDepLat, uDepLng, pDestLat, pDestLng) > totalUserDist * 0.2;
 
-  // 케이스 B: 사용자 목적지가 팟 경로 선분 위에 있음 (중간 하차)
-  const userDestOnPodRoute = pointToSegmentDistKm(
-    uDestLat, uDestLng,
-    pDepLat, pDepLng, pDestLat, pDestLng
-  ) < threshold;
-  // + 팟이 사용자 목적지를 넘어 더 가야 의미 있음 (최소 10% 이상)
-  const podCoverageB = getDistKm(pDepLat, pDepLng, pDestLat, pDestLng) >
-                       getDistKm(pDepLat, pDepLng, uDestLat, uDestLng) * 1.1;
+  // 케이스 B: 내 목적지가 팟 경로 위 → 중간 하차
+  const userDestOnPodRoute = pointToSegmentDistKm(uDestLat, uDestLng, pDepLat, pDepLng, pDestLat, pDestLng) < threshold;
+  const podCoverageB = getDistKm(pDepLat, pDepLng, pDestLat, pDestLng) > getDistKm(pDepLat, pDepLng, uDestLat, uDestLng) * 1.1;
 
-  return (podEndOnUserRoute && podCoverageA) || (userDestOnPodRoute && podCoverageB);
+  if (userDestOnPodRoute && podCoverageB) return 'case-b';
+  if (podEndOnUserRoute && podCoverageA) return 'case-a';
+  return null;
 }
 
 export function SearchScreen({ isOpen, onClose, onCreatePod, onPodClick, allPods, user, initialFocus }: SearchScreenProps) {
   const [depQuery, setDepQuery] = useState('');
   const [destQuery, setDestQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Pod[]>([]);
-  const [directionResults, setDirectionResults] = useState<Pod[]>([]);
+  const [directionResults, setDirectionResults] = useState<(Pod & { matchType: 'case-a' | 'case-b' })[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const depInputRef = useRef<HTMLInputElement>(null);
 
@@ -201,15 +191,17 @@ export function SearchScreen({ isOpen, onClose, onCreatePod, onPodClick, allPods
 
     // 3) 경로 호환 매칭: 출발/도착 좌표가 모두 있을 때
     if (depCoords && destCoords) {
-      const dirMatched = allPods.filter(pod => {
-        if (exactResults.some(r => r.id === pod.id)) return false;
-        if (!pod.startLat || !pod.startLng || !pod.endLat || !pod.endLng) return false;
-        return isRouteCompatible(
+      const dirMatched: (Pod & { matchType: 'case-a' | 'case-b' })[] = [];
+      allPods.forEach(pod => {
+        if (exactResults.some(r => r.id === pod.id)) return;
+        if (!pod.startLat || !pod.startLng || !pod.endLat || !pod.endLng) return;
+        const matchType = isRouteCompatible(
           depCoords!.lat, depCoords!.lng,
           destCoords!.lat, destCoords!.lng,
           pod.startLat, pod.startLng,
           pod.endLat, pod.endLng
         );
+        if (matchType) dirMatched.push({ ...pod, matchType });
       });
       setDirectionResults(dirMatched);
     } else {
@@ -229,7 +221,7 @@ export function SearchScreen({ isOpen, onClose, onCreatePod, onPodClick, allPods
   const handleCreateFromSearch = () => {
     haptics.medium();
     if (!user) {
-      alert('로그인이 필요합니다.');
+      toast.error('로그인이 필요합니다.');
       return;
     }
     onClose();
@@ -336,8 +328,7 @@ export function SearchScreen({ isOpen, onClose, onCreatePod, onPodClick, allPods
             {(depQuery && destQuery) && directionResults.length > 0 && (
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-[#191F28]">합승 가능한 팟</span>
-                  <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">경로 호환 🛣️</span>
+                  <span className="text-sm font-bold text-[#191F28]">합승 가능한 팟 🛣️</span>
                 </div>
                 <p className="text-xs text-gray-500 -mt-2">목적지가 달라도 중간 하차하거나 환승해서 갈 수 있어요</p>
                 {directionResults.map((pod, index) => (
@@ -354,9 +345,9 @@ export function SearchScreen({ isOpen, onClose, onCreatePod, onPodClick, allPods
                     }}
                     className="bg-green-50 border border-green-200 rounded-2xl p-4 cursor-pointer"
                   >
-                    <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-start justify-between mb-2">
                       <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
+                        <div className="flex items-center gap-2 mb-2 flex-wrap">
                           <MapPin className="w-4 h-4 text-green-600" />
                           <span className="font-bold text-[#191F28]">{pod.departure}</span>
                           <span className="text-gray-400">→</span>
@@ -369,10 +360,15 @@ export function SearchScreen({ isOpen, onClose, onCreatePod, onPodClick, allPods
                       </div>
                       <div className="flex items-center gap-1 text-[#3182F6]">
                         <Users className="w-4 h-4" />
-                        <span className="text-sm font-semibold">
-                          {pod.currentMembers}/{pod.maxMembers}
-                        </span>
+                        <span className="text-sm font-semibold">{pod.currentMembers}/{pod.maxMembers}</span>
                       </div>
+                    </div>
+                    <div className="mt-2">
+                      {pod.matchType === 'case-b' ? (
+                        <span className="text-xs bg-green-200 text-green-800 px-2.5 py-1 rounded-full font-semibold">🚖 중간 하차 가능</span>
+                      ) : (
+                        <span className="text-xs bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full font-semibold">🔄 환승 경유지</span>
+                      )}
                     </div>
                   </motion.div>
                 ))}
