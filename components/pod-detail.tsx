@@ -65,6 +65,7 @@ interface PodDetailProps {
     hasDeposit?: boolean;
     depositAmount?: number;
     genderFilter?: string;
+    status?: string;
   };
   onBack: () => void;
   onJoin?: () => void;
@@ -705,16 +706,18 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
                   </div>
                 )}
 
-                {/* 일반 멤버: 자기 자신이 아닌 경우에 칭찬/신고 */}
-                {!isHost && user && participant.id !== user.id && (
+                {/* 자기 자신이 아닌 경우: 신고(언제나) + 칭찬(완료 후만) */}
+                {user && participant.id !== user.id && (
                   <div className="flex gap-1.5">
-                    <button
-                      onClick={() => handlePraise(participant.id, participant.name)}
-                      className="p-1.5 rounded-full bg-yellow-50 text-yellow-500 hover:bg-yellow-100 transition-colors"
-                      title="칭찬하기"
-                    >
-                      <ThumbsUp className="w-3.5 h-3.5" />
-                    </button>
+                    {pod.status === 'completed' && (
+                      <button
+                        onClick={() => handlePraise(participant.id, participant.name)}
+                        className="p-1.5 rounded-full bg-yellow-50 text-yellow-500 hover:bg-yellow-100 transition-colors"
+                        title="칭찬하기"
+                      >
+                        <ThumbsUp className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                     <button
                       onClick={() => setReportTarget({ userId: participant.id, userName: participant.name })}
                       className="p-1.5 rounded-full bg-red-50 text-red-400 hover:bg-red-100 transition-colors"

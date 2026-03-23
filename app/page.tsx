@@ -14,6 +14,8 @@ import { PushGuideSheet } from '@/components/push-guide-sheet';
 import { PodListSkeleton, LivePodsSkeleton } from '@/components/loading-skeleton';
 import { GenderOnboarding } from '@/components/gender-onboarding';
 import { OnboardingGuide } from '@/components/onboarding-guide';
+import { PraisePromptSheet, PendingPraiseParty } from '@/components/praise-prompt-sheet';
+import { ThumbsUp } from 'lucide-react';
 import { haptics } from '@/lib/haptics';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -46,6 +48,8 @@ export default function Home() {
   const [allPods, setAllPods] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentLocationName, setCurrentLocationName] = useState<string | null>(null);
+  const [pendingPraiseParties, setPendingPraiseParties] = useState<PendingPraiseParty[]>([]);
+  const [praiseSheetOpen, setPraiseSheetOpen] = useState(false);
 
   const fetchPods = async () => {
     setIsLoading(true);
@@ -112,6 +116,49 @@ export default function Home() {
     setIsLoading(false);
   };
 
+  const fetchPendingPraises = async (userId: string) => {
+    const { data: memberRows } = await supabase
+      .from('party_members')
+      .select('party_id')
+      .eq('user_id', userId)
+      .in('status', ['joined', 'paid']);
+
+    if (!memberRows?.length) return;
+    const partyIds = memberRows.map((m: any) => m.party_id);
+
+    const { data: completedParties } = await supabase
+      .from('parties')
+      .select('id, start_point, end_point, party_members(user_id, status, user:users(nickname, avatar_url))')
+      .in('id', partyIds)
+      .eq('status', 'completed');
+
+    if (!completedParties?.length) return;
+
+    const { data: myPraises } = await supabase
+      .from('praises')
+      .select('praised_user_id, party_id')
+      .eq('praiser_id', userId)
+      .in('party_id', partyIds);
+
+    const praisedSet = new Set((myPraises || []).map((p: any) => `${p.party_id}-${p.praised_user_id}`));
+
+    const pending: PendingPraiseParty[] = [];
+    for (const party of completedParties) {
+      const members = ((party.party_members as any[]) || [])
+        .filter((m: any) => m.user_id !== userId && ['joined', 'paid'].includes(m.status))
+        .map((m: any) => ({
+          id: m.user_id,
+          name: m.user?.nickname || '멤버',
+          avatar: m.user?.avatar_url || '',
+          praised: praisedSet.has(`${party.id}-${m.user_id}`)
+        }));
+      if (members.some((m: any) => !m.praised)) {
+        pending.push({ id: party.id, departure: party.start_point, destination: party.end_point, members });
+      }
+    }
+    setPendingPraiseParties(pending);
+  };
+
   const checkUserGender = async (userId: string) => {
     const { data } = await supabase.from('users').select('gender').eq('id', userId).single();
     if (data?.gender) {
@@ -124,14 +171,20 @@ export default function Home() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
-      if (currentUser) checkUserGender(currentUser.id);
+      if (currentUser) {
+        checkUserGender(currentUser.id);
+        fetchPendingPraises(currentUser.id);
+      }
     });
 
     // 인증 상태 변화 구독
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
-      if (currentUser) checkUserGender(currentUser.id);
+      if (currentUser) {
+        checkUserGender(currentUser.id);
+        fetchPendingPraises(currentUser.id);
+      }
     });
 
     fetchPods();
@@ -372,6 +425,28 @@ export default function Home() {
                 </div>
               </motion.div>
 
+              {pendingPraiseParties.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="px-6 mb-4"
+                >
+                  <button
+                    onClick={() => { haptics.light(); setPraiseSheetOpen(true); }}
+                    className="w-full flex items-center gap-4 bg-yellow-50 border border-yellow-200 rounded-2xl p-4 text-left active:bg-yellow-100 transition-colors"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-yellow-400 flex items-center justify-center flex-shrink-0">
+                      <ThumbsUp className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-sm text-[#191F28]">함께한 멤버를 칭찬해주세요</p>
+                      <p className="text-xs text-gray-500 mt-0.5">완료된 팟 {pendingPraiseParties.length}개 · 칭찬 대기 중</p>
+                    </div>
+                    <span className="text-yellow-500 text-lg">→</span>
+                  </button>
+                </motion.div>
+              )}
+
               {isLoading ? (
                 <LivePodsSkeleton />
               ) : (
@@ -571,6 +646,23 @@ export default function Home() {
           isOpen={pushGuideOpen}
           onClose={() => setPushGuideOpen(false)}
           user={user}
+        />
+
+        <PraisePromptSheet
+          isOpen={praiseSheetOpen}
+          onClose={() => setPraiseSheetOpen(false)}
+          userId={user?.id || ''}
+          parties={pendingPraiseParties}
+          onPraised={(partyId, memberId) => {
+            setPendingPraiseParties(prev => {
+              const updated = prev.map(p =>
+                p.id === partyId
+                  ? { ...p, members: p.members.map(m => m.id === memberId ? { ...m, praised: true } : m) }
+                  : p
+              ).filter(p => p.members.some(m => !m.praised));
+              return updated;
+            });
+          }}
         />
       </div>
     </div>
