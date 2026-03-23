@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { Trash2, ShieldAlert, ArrowRight } from 'lucide-react';
 
 // 관리자 이메일 목록 (환경변수로 설정 가능)
-const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean);
+const ADMIN_EMAILS = ['gocks77777@naver.com'];
 
 export default function AdminPage() {
   const [user, setUser] = useState<any>(null);
