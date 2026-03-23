@@ -49,12 +49,7 @@ export function ReportModal({ isOpen, onClose, reportedUserId, reportedUserName,
       return;
     }
 
-    // 매너온도 -0.5 (DB function 호출)
-    await supabase.rpc('increment_manner_score', {
-      target_user_id: reportedUserId,
-      delta: -0.5
-    });
-
+    // 매너온도는 관리자 검토 후 처리됩니다 (즉시 차감 없음)
     haptics.medium();
     toast.success(`신고가 접수됐어요. 검토 후 처리됩니다.`);
     setIsSubmitting(false);

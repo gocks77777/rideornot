@@ -333,8 +333,13 @@ export function MyPage({ user, onRecreatePod }: { user?: any; onRecreatePod?: (p
 
   const getStatusBadge = (status: string) => {
     switch (status) {
+      case 'recruiting':
       case 'upcoming':
-        return <span className="text-xs font-semibold text-[#3182F6]">예정</span>;
+        return <span className="text-xs font-semibold text-[#3182F6]">모집중</span>;
+      case 'full':
+        return <span className="text-xs font-semibold text-orange-500">마감</span>;
+      case 'departed':
+        return <span className="text-xs font-semibold text-purple-500">출발</span>;
       case 'completed':
         return <span className="text-xs font-semibold text-gray-500">완료</span>;
       case 'cancelled':
@@ -585,8 +590,23 @@ export function MyPage({ user, onRecreatePod }: { user?: any; onRecreatePod?: (p
         </Tabs>
       </div>
 
+      {/* 고객 응대 */}
+      <div className="mt-6 bg-[#F2F4F6] rounded-3xl p-5">
+        <h3 className="font-bold text-[#191F28] mb-3">도움이 필요하신가요?</h3>
+        <a
+          href="mailto:gocks77777@naver.com?subject=탈래말래 문의"
+          className="flex items-center justify-between bg-white rounded-2xl p-4 hover:bg-gray-50 transition-colors"
+        >
+          <div>
+            <p className="font-semibold text-sm text-[#191F28]">이메일 문의</p>
+            <p className="text-xs text-gray-500 mt-0.5">gocks77777@naver.com</p>
+          </div>
+          <span className="text-gray-400">→</span>
+        </a>
+      </div>
+
       {/* 법적 링크 */}
-      <div className="mt-8 flex justify-center gap-4 text-xs text-gray-400">
+      <div className="mt-6 flex justify-center gap-4 text-xs text-gray-400">
         <a href="/terms" className="hover:text-gray-600 underline underline-offset-2 transition-colors">이용약관</a>
         <span>·</span>
         <a href="/privacy" className="hover:text-gray-600 underline underline-offset-2 transition-colors font-semibold">개인정보처리방침</a>

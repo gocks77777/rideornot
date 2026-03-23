@@ -263,6 +263,24 @@ export default function Home() {
       return;
     }
 
+    // 계좌번호 확인
+    const { data: profile } = await supabase.from('users').select('bank_account').eq('id', user.id).single();
+    if (!profile?.bank_account) {
+      toast.error('계좌번호를 먼저 설정해주세요. (내 프로필 → 계좌 정보)');
+      return;
+    }
+
+    // 활성 팟 중복 생성 방지
+    const { data: activePods } = await supabase
+      .from('parties')
+      .select('id')
+      .eq('host_id', user.id)
+      .in('status', ['recruiting', 'full', 'departed']);
+    if (activePods && activePods.length > 0) {
+      toast.error('이미 진행 중인 팟이 있습니다. 완료 후 새 팟을 만들 수 있어요.');
+      return;
+    }
+
     // Insert into parties table
     const { data: newPod, error } = await supabase
       .from('parties')
@@ -387,7 +405,6 @@ export default function Home() {
                       ? `반가워요! 👋\n지금 ${currentLocationName}에서 출발하시나요?`
                       : '반가워요! 👋\n오늘도 택시비 아껴볼까요?'}
                 </h1>
-                <p className="text-xs text-gray-400 mt-2">오전 2시 13분 수정됨.</p>
               </motion.div>
 
               <motion.div
