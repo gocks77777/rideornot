@@ -2,6 +2,7 @@ import './globals.css';
 import type { Metadata } from 'next';
 import Script from 'next/script';
 import { Toaster } from '@/components/ui/sonner';
+import { InAppBrowserGuide } from '@/components/inapp-browser-guide';
 
 export const metadata: Metadata = {
   title: '탈래말래?',
@@ -48,6 +49,7 @@ export default function RootLayout({
         />
         {children}
         <Toaster position="top-center" richColors />
+        <InAppBrowserGuide />
       </body>
     </html>
   );

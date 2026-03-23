@@ -92,7 +92,6 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
   const [reportTarget, setReportTarget] = useState<{ userId: string; userName: string } | null>(null);
 
   const mapRef = useRef<HTMLDivElement>(null);
-  const isInitialCommentLoad = useRef(true);
 
   const [realTaxiFare, setRealTaxiFare] = useState<number | null>(null);
   const [routeDuration, setRouteDuration] = useState<number | null>(null);
@@ -103,6 +102,7 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
   const [commentInput, setCommentInput] = useState('');
   const [isSendingComment, setIsSendingComment] = useState(false);
   const commentsEndRef = useRef<HTMLDivElement>(null);
+  const [scrollToBottom, setScrollToBottom] = useState(false);
 
   const [pendingMembers, setPendingMembers] = useState<PendingMember[]>([]);
 
@@ -361,6 +361,7 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
           message: payload.new.message,
           createdAt: '방금'
         }]);
+        setScrollToBottom(true);
       })
       .subscribe();
 
@@ -368,12 +369,10 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
   }, [pod.id]);
 
   useEffect(() => {
-    if (isInitialCommentLoad.current) {
-      isInitialCommentLoad.current = false;
-      return;
-    }
+    if (!scrollToBottom) return;
     commentsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [comments]);
+    setScrollToBottom(false);
+  }, [scrollToBottom]);
 
   const formatTimeAgo = (dateStr: string) => {
     const diff = Date.now() - new Date(dateStr).getTime();
@@ -392,6 +391,7 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
     const { error } = await supabase.from('comments').insert({ party_id: pod.id, user_id: user.id, message });
     if (!error) {
       setCommentInput('');
+      setScrollToBottom(true);
       const senderName = user.user_metadata?.full_name || user.user_metadata?.name || '누군가';
       const targets = approvedParticipants.filter(p => p.id !== user.id).map(p => p.id);
       if (pod.hostId && pod.hostId !== user.id && !targets.includes(pod.hostId)) targets.push(pod.hostId);
