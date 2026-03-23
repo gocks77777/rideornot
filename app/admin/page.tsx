@@ -32,7 +32,7 @@ export default function AdminPage() {
 
   const fetchAll = async () => {
     const [podsRes, commentsRes, reportsRes] = await Promise.all([
-      supabase.from('parties').select('*, host:users!parties_host_id_fkey(nickname, email)').order('created_at', { ascending: false }).limit(100),
+      supabase.from('parties').select('*, host:users!parties_host_id_fkey(nickname)').order('created_at', { ascending: false }).limit(100),
       supabase.from('comments').select('*, user:users(nickname), party:parties(start_point, end_point)').order('created_at', { ascending: false }).limit(200),
       supabase.from('reports').select('*, reporter:users!reports_reporter_id_fkey(nickname), reported:users!reports_reported_user_id_fkey(nickname, manner_score)').order('created_at', { ascending: false }).limit(200),
     ]);

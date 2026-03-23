@@ -672,8 +672,8 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
                 )}
                 <span className="text-sm font-semibold text-[#191F28] flex-1">{participant.name}</span>
 
-                {/* 방장 전용: 재촉 + 송금 토글 */}
-                {isHost && (
+                {/* 방장 전용: 재촉 + 송금 토글 (자기 자신 제외) */}
+                {isHost && user && participant.id !== user.id && (
                   <div className="flex items-center gap-1.5">
                     {!participantsPaidStatus[participant.id] && (
                       <button
