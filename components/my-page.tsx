@@ -22,6 +22,7 @@ export interface Pod {
   destination: string;
   departureTime: string;
   status: 'completed' | 'upcoming' | 'cancelled';
+  myMemberStatus?: 'pending' | 'joined' | 'paid' | 'rejected';
   participants?: Participant[];
   startLat?: number;
   startLng?: number;
@@ -147,6 +148,7 @@ export function MyPage({ user, onRecreatePod }: { user?: any; onRecreatePod?: (p
     supabase
       .from("party_members")
       .select(`
+        status,
         parties(*,
           party_members(user_id, user:users(nickname, avatar_url))
         )
@@ -155,28 +157,28 @@ export function MyPage({ user, onRecreatePod }: { user?: any; onRecreatePod?: (p
       .then(({ data }) => {
         if (data) {
           const joined = data
-            .map((m: any) => m.parties)
-            .filter((p: any) => p && p.host_id !== user.id) // exclude hosted ones
-            .map((p: any) => ({
-              id: p.id,
-              departure: p.start_point,
-              destination: p.end_point,
-              departureTime: new Date(p.departure_time).toLocaleString("ko-KR", {
+            .filter((m: any) => m.parties && m.parties.host_id !== user.id)
+            .map((m: any) => ({
+              id: m.parties.id,
+              departure: m.parties.start_point,
+              destination: m.parties.end_point,
+              departureTime: new Date(m.parties.departure_time).toLocaleString("ko-KR", {
                 month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
               }),
-              status: p.status as "upcoming" | "completed" | "cancelled",
-              participants: p.party_members?.map((m: any) => ({
-                id: m.user_id,
-                name: m.user?.nickname || "멤버",
-                avatar: m.user?.avatar_url || ""
+              status: m.parties.status as "upcoming" | "completed" | "cancelled",
+              myMemberStatus: m.status, // pending | joined | paid | rejected
+              participants: m.parties.party_members?.map((pm: any) => ({
+                id: pm.user_id,
+                name: pm.user?.nickname || "멤버",
+                avatar: pm.user?.avatar_url || ""
               })) || [],
-              startLat: p.start_lat,
-              startLng: p.start_lng,
-              endLat: p.end_lat,
-              endLng: p.end_lng,
-              maxMembers: p.max_member,
-              genderFilter: p.gender_filter,
-              departureDetail: p.departure_detail
+              startLat: m.parties.start_lat,
+              startLng: m.parties.start_lng,
+              endLat: m.parties.end_lat,
+              endLng: m.parties.end_lng,
+              maxMembers: m.parties.max_member,
+              genderFilter: m.parties.gender_filter,
+              departureDetail: m.parties.departure_detail
             }));
           setJoinedPods(joined);
         }
@@ -576,7 +578,15 @@ export function MyPage({ user, onRecreatePod }: { user?: any; onRecreatePod?: (p
                       <span className="text-sm truncate">{pod.departureTime}</span>
                     </div>
                   </div>
-                  {getStatusBadge(pod.status)}
+                  <div className="flex flex-col items-end gap-1">
+                    {getStatusBadge(pod.status)}
+                    {pod.myMemberStatus === 'pending' && (
+                      <span className="text-xs font-semibold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">승인 대기중</span>
+                    )}
+                    {pod.myMemberStatus === 'rejected' && (
+                      <span className="text-xs font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded-full">거절됨</span>
+                    )}
+                  </div>
                 </div>
               </motion.div>
             ))}
