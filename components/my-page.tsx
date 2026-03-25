@@ -281,6 +281,24 @@ export function MyPage({ user, onRecreatePod }: { user?: any; onRecreatePod?: (p
     await supabase.auth.signOut();
   };
 
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const handleDeleteAccount = async () => {
+    if (!user) return;
+    haptics.heavy();
+    const res = await fetch('/api/delete-account', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: user.id })
+    });
+    if (res.ok) {
+      await supabase.auth.signOut();
+      toast.success('계정이 삭제됐습니다.');
+    } else {
+      toast.error('탈퇴 처리 중 오류가 발생했습니다.');
+    }
+    setShowDeleteConfirm(false);
+  };
+
   const handleSaveBankAccount = async () => {
     haptics.medium();
     if (!user) return;
