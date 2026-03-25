@@ -150,12 +150,14 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
 
     const { data: partyRow } = await supabase
       .from('parties')
-      .select('current_member')
+      .select('current_member, max_member')
       .eq('id', pod.id)
       .single();
     if (partyRow) {
+      const newCount = partyRow.current_member + 1;
+      const isFull = newCount >= partyRow.max_member;
       await supabase.from('parties')
-        .update({ current_member: partyRow.current_member + 1 })
+        .update({ current_member: newCount, ...(isFull && { status: 'full' }) })
         .eq('id', pod.id);
     }
 
