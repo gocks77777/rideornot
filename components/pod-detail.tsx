@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { PaymentModal } from '@/components/payment-modal';
 import { ReportModal } from '@/components/report-modal';
 import { haptics } from '@/lib/haptics';
-import { supabase } from '@/lib/supabase';
+import { supabase, sendPush } from '@/lib/supabase';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -164,16 +164,12 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
     setPendingMembers(prev => prev.filter(m => m.userId !== userId));
     haptics.success();
     toast.success('멤버를 승인했어요!');
-    fetch('/api/push', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId,
-        title: '참여 승인됐어요! 🎉',
-        body: `${pod.departure} → ${pod.destination} 팟 참여가 승인됐어요!`,
-        url: `/?pod=${pod.id}`
-      })
-    }).catch(console.error);
+    sendPush({
+      userId,
+      title: '참여 승인됐어요! 🎉',
+      body: `${pod.departure} → ${pod.destination} 팟 참여가 승인됐어요!`,
+      url: `/?pod=${pod.id}`
+    });
   };
 
   const handleRejectMember = async (userId: string) => {
@@ -186,16 +182,12 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
     setPendingMembers(prev => prev.filter(m => m.userId !== userId));
     haptics.light();
     toast.info('신청을 거절했어요.');
-    fetch('/api/push', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId,
-        title: '참여 신청 거절',
-        body: `${pod.departure} → ${pod.destination} 팟 참여가 거절됐어요. 예약금은 돌려받으세요.`,
-        url: `/?pod=${pod.id}`
-      })
-    }).catch(console.error);
+    sendPush({
+      userId,
+      title: '참여 신청 거절',
+      body: `${pod.departure} → ${pod.destination} 팟 참여가 거절됐어요. 예약금은 돌려받으세요.`,
+      url: `/?pod=${pod.id}`
+    });
   };
 
   // 팟 나가기
@@ -226,16 +218,12 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
     // 방장에게 알림
     if (pod.hostId) {
       const leaverName = user.user_metadata?.full_name || user.user_metadata?.name || '누군가';
-      fetch('/api/push', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: pod.hostId,
-          title: '멤버가 나갔어요 😢',
-          body: `${leaverName}님이 ${pod.departure} → ${pod.destination} 팟에서 나갔어요.`,
-          url: `/?pod=${pod.id}`
-        })
-      }).catch(console.error);
+      sendPush({
+        userId: pod.hostId,
+        title: '멤버가 나갔어요 😢',
+        body: `${leaverName}님이 ${pod.departure} → ${pod.destination} 팟에서 나갔어요.`,
+        url: `/?pod=${pod.id}`
+      });
     }
 
     onBack();
@@ -399,16 +387,12 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
       const targets = approvedParticipants.filter(p => p.id !== user.id).map(p => p.id);
       if (pod.hostId && pod.hostId !== user.id && !targets.includes(pod.hostId)) targets.push(pod.hostId);
       targets.forEach(targetId => {
-        fetch('/api/push', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: targetId,
-            title: `💬 ${senderName}님의 댓글`,
-            body: message.length > 40 ? message.slice(0, 40) + '…' : message,
-            url: `/?pod=${pod.id}`
-          })
-        }).catch(console.error);
+        sendPush({
+          userId: targetId,
+          title: `💬 ${senderName}님의 댓글`,
+          body: message.length > 40 ? message.slice(0, 40) + '…' : message,
+          url: `/?pod=${pod.id}`
+        });
       });
     }
     setIsSendingComment(false);
@@ -458,16 +442,12 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
       // 모든 멤버에게 알림
       approvedParticipants.forEach(p => {
         if (p.id === user.id) return;
-        fetch('/api/push', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: p.id,
-            title: '팟이 폭파됐어요 💥',
-            body: `${pod.departure} → ${pod.destination} 팟이 방장에 의해 취소되었습니다.`,
-            url: '/'
-          })
-        }).catch(console.error);
+        sendPush({
+          userId: p.id,
+          title: '팟이 폭파됐어요 💥',
+          body: `${pod.departure} → ${pod.destination} 팟이 방장에 의해 취소되었습니다.`,
+          url: '/'
+        });
       });
       onBack();
     }
@@ -682,17 +662,13 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
                       <button
                         onClick={() => {
                           haptics.medium();
-                          fetch('/api/push', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                              userId: participant.id,
-                              title: '💸 송금 잊으셨나요?',
-                              body: `${pod.departure} → ${pod.destination} 팟 택시비 송금을 까먹으신 건 아닌가요?`,
-                              url: `/?pod=${pod.id}`
-                            })
-                          }).then(() => toast.success(`${participant.name}님에게 재촉 알림을 보냈어요!`))
-                            .catch(() => toast.error('알림 전송에 실패했어요.'));
+                          sendPush({
+                            userId: participant.id,
+                            title: '💸 송금 잊으셨나요?',
+                            body: `${pod.departure} → ${pod.destination} 팟 택시비 송금을 까먹으신 건 아닌가요?`,
+                            url: `/?pod=${pod.id}`
+                          });
+                          toast.success(`${participant.name}님에게 재촉 알림을 보냈어요!`);
                         }}
                         className="px-2.5 py-1.5 rounded-full text-xs font-medium bg-orange-100 text-orange-600 hover:bg-orange-200 transition-colors"
                       >

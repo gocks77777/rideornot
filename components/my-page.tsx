@@ -285,9 +285,14 @@ export function MyPage({ user, onRecreatePod }: { user?: any; onRecreatePod?: (p
   const handleDeleteAccount = async () => {
     if (!user) return;
     haptics.heavy();
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
     const res = await fetch('/api/delete-account', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
       body: JSON.stringify({ userId: user.id })
     });
     if (res.ok) {

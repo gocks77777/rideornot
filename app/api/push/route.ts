@@ -29,15 +29,21 @@ const supabaseAdmin = supabaseUrl && supabaseServiceKey
 
 export async function POST(req: Request) {
   try {
+    // 로그인한 사용자만 푸시 발송 가능
+    const token = req.headers.get('Authorization')?.replace('Bearer ', '');
+    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: 'Supabase config missing' }, { status: 500 });
+    }
+
+    const { data: { user: authUser }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    if (authError || !authUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
     const { userId, title, body, url } = await req.json();
 
     if (!userId || !title) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
-    }
-
-    if (!supabaseAdmin) {
-      console.warn('Supabase admin client not initialized. Push skipped.');
-      return NextResponse.json({ error: 'Supabase config missing' }, { status: 500 });
     }
 
     // 1. 해당 유저의 푸시 구독 정보(Endpoint 등)를 DB에서 가져옵니다.

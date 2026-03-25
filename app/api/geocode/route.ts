@@ -32,6 +32,7 @@ export async function GET(request: Request) {
         const data = await response.json();
 
         if (data.items && data.items.length > 0) {
+          clearTimeout(timeoutId);
           const results = data.items.map((item: any) => ({
             title: item.title.replace(/<[^>]*>/g, ''), // Strip HTML tags
             address: item.roadAddress || item.address || '',

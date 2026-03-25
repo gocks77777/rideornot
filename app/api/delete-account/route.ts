@@ -8,19 +8,22 @@ const supabaseAdmin = createClient(
 
 export async function POST(request: Request) {
   try {
+    // 1. 요청자 인증 검증
+    const token = request.headers.get('Authorization')?.replace('Bearer ', '');
+    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const { data: { user: authUser }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    if (authError || !authUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
     const { userId } = await request.json();
     if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 });
 
-    // Auth 계정 먼저 삭제 (실패 시 users 테이블은 그대로 유지 → 데이터 불일치 없음)
-    const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(userId);
-    if (authError) return NextResponse.json({ error: authError.message }, { status: 500 });
+    // 2. 본인 계정만 삭제 가능
+    if (authUser.id !== userId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-    // Auth 삭제 성공 후 users 테이블 삭제 (CASCADE로 party_members, praises, reports 등 연쇄 삭제)
-    const { error: dbError } = await supabaseAdmin.from('users').delete().eq('id', userId);
-    if (dbError) {
-      // Auth는 이미 삭제됐으므로 로그인 불가 상태 — 클라이언트엔 성공 반환
-      console.error('[delete-account] users 테이블 삭제 실패 (고아 행 발생):', dbError.message);
-    }
+    // 3. Auth 계정 삭제 → users 테이블은 ON DELETE CASCADE로 자동 삭제됨
+    const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
+    if (deleteError) return NextResponse.json({ error: deleteError.message }, { status: 500 });
 
     return NextResponse.json({ success: true });
   } catch (e: any) {

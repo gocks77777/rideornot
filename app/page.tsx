@@ -17,7 +17,7 @@ import { OnboardingGuide } from '@/components/onboarding-guide';
 import { PraisePromptSheet, PendingPraiseParty } from '@/components/praise-prompt-sheet';
 import { ThumbsUp } from 'lucide-react';
 import { haptics } from '@/lib/haptics';
-import { supabase } from '@/lib/supabase';
+import { supabase, sendPush } from '@/lib/supabase';
 import { toast } from 'sonner';
 
 // Haversine distance in km
@@ -628,16 +628,12 @@ export default function Home() {
               if (isDepositPod) {
                 toast.success('참여 신청 완료! 방장이 송금 확인 후 승인해드릴 거예요 🙏');
                 if (selectedPod.hostId) {
-                  fetch('/api/push', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      userId: selectedPod.hostId,
-                      title: '새 참여 신청 💰',
-                      body: `${user.user_metadata?.full_name || user?.user_metadata?.name || '누군가'}님이 예약금을 보내고 참여 신청했어요!`,
-                      url: `/?pod=${selectedPod.id}`
-                    })
-                  }).catch(console.error);
+                  sendPush({
+                    userId: selectedPod.hostId,
+                    title: '새 참여 신청 💰',
+                    body: `${user.user_metadata?.full_name || user?.user_metadata?.name || '누군가'}님이 예약금을 보내고 참여 신청했어요!`,
+                    url: `/?pod=${selectedPod.id}`
+                  });
                 }
               } else {
                 toast.success('팟에 참여했습니다! 🎉');
@@ -647,16 +643,12 @@ export default function Home() {
                 }
                 const targets = notifyUsers.filter((id: string) => id !== user.id);
                 targets.forEach((targetId: string) => {
-                  fetch('/api/push', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      userId: targetId,
-                      title: '새로운 참여자 🎉',
-                      body: `${user.user_metadata?.full_name || user?.user_metadata?.name || '누군가'}님이 팟에 참여했습니다!`,
-                      url: `/?pod=${selectedPod.id}`
-                    })
-                  }).catch(console.error);
+                  sendPush({
+                    userId: targetId,
+                    title: '새로운 참여자 🎉',
+                    body: `${user.user_metadata?.full_name || user?.user_metadata?.name || '누군가'}님이 팟에 참여했습니다!`,
+                    url: `/?pod=${selectedPod.id}`
+                  });
                 });
               }
 
