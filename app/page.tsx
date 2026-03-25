@@ -39,6 +39,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState('home');
   const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false);
   const [createPodInitialData, setCreatePodInitialData] = useState<any>(null);
+  const [userBankAccount, setUserBankAccount] = useState<string | null | undefined>(undefined);
   const [searchSheetOpen, setSearchSheetOpen] = useState(false);
   const [searchFocus, setSearchFocus] = useState<'departure' | 'destination' | null>(null);
   const [pushGuideOpen, setPushGuideOpen] = useState(false);
@@ -186,6 +187,8 @@ export default function Home() {
         setUser(currentUser);
         checkUserGender(currentUser.id);
         fetchPendingPraises(currentUser.id);
+        supabase.from('users').select('bank_account').eq('id', currentUser.id).single()
+          .then(({ data }) => setUserBankAccount(data?.bank_account ?? null));
       }
     });
 
@@ -198,8 +201,11 @@ export default function Home() {
         setUser(currentUser);
         checkUserGender(currentUser.id);
         fetchPendingPraises(currentUser.id);
+        supabase.from('users').select('bank_account').eq('id', currentUser.id).single()
+          .then(({ data }) => setUserBankAccount(data?.bank_account ?? null));
       } else {
         setUser(null);
+        setUserBankAccount(undefined);
       }
     });
 
@@ -271,6 +277,22 @@ export default function Home() {
         redirectTo: `${window.location.origin}`,
       },
     });
+  };
+
+  const handleOpenCreateSheet = () => {
+    if (!user) {
+      toast.error('로그인이 필요합니다.');
+      return;
+    }
+    if (!userBankAccount) {
+      toast.error('팟을 만들려면 먼저 계좌번호를 등록해주세요!', {
+        description: '마이페이지 → 계좌 정보에서 등록할 수 있어요.',
+        duration: 4000,
+      });
+      setActiveTab('my');
+      return;
+    }
+    setIsCreateSheetOpen(true);
   };
 
   const handleCreatePod = async (data: any) => {
@@ -518,12 +540,13 @@ export default function Home() {
               exit="exit"
               transition={{ duration: 0.3 }}
             >
-              <MyPage 
-                user={user} 
+              <MyPage
+                user={user}
+                onBankAccountSaved={(account) => setUserBankAccount(account)}
                 onRecreatePod={(pod) => {
                   setCreatePodInitialData(pod);
                   setIsCreateSheetOpen(true);
-                }} 
+                }}
               />
             </motion.div>
           )}
@@ -532,7 +555,7 @@ export default function Home() {
         <FloatingNav
           activeTab={activeTab}
           onTabChange={setActiveTab}
-          onCreatePod={() => setIsCreateSheetOpen(true)}
+          onCreatePod={handleOpenCreateSheet}
           user={user}
         />
 
@@ -663,7 +686,7 @@ export default function Home() {
         <SearchScreen
           isOpen={searchSheetOpen}
           onClose={() => setSearchSheetOpen(false)}
-          onCreatePod={() => setIsCreateSheetOpen(true)}
+          onCreatePod={handleOpenCreateSheet}
           onPodClick={setSelectedPodId}
           allPods={allPods}
           user={user}

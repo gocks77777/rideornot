@@ -83,7 +83,7 @@ function ParticipantsModal({ isOpen, onClose, participants }: ParticipantsModalP
   );
 }
 
-export function MyPage({ user, onRecreatePod }: { user?: any; onRecreatePod?: (pod: Pod) => void }) {
+export function MyPage({ user, onRecreatePod, onBankAccountSaved }: { user?: any; onRecreatePod?: (pod: Pod) => void; onBankAccountSaved?: (account: string) => void }) {
   const [mannerTemp, setMannerTemp] = useState(36.5);
   const [bankAccount, setBankAccount] = useState('');
   const [isEditingAccount, setIsEditingAccount] = useState(false);
@@ -319,6 +319,7 @@ export function MyPage({ user, onRecreatePod }: { user?: any; onRecreatePod?: (p
     } else {
       setIsEditingAccount(false);
       toast.success('계좌번호가 저장됐습니다!');
+      onBankAccountSaved?.(bankAccount);
     }
   };
 

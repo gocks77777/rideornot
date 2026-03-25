@@ -26,7 +26,8 @@ export function PaymentModal({
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(accountNumber);
+    const numbersOnly = accountNumber.replace(/[^0-9]/g, '');
+    navigator.clipboard.writeText(numbersOnly);
     setCopied(true);
     haptics.light();
     setTimeout(() => setCopied(false), 2000);

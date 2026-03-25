@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { PaymentModal } from '@/components/payment-modal';
 import { ReportModal } from '@/components/report-modal';
 import { haptics } from '@/lib/haptics';
-import { supabase, sendPush } from '@/lib/supabase';
+import { supabase, sendPush, sendPraise } from '@/lib/supabase';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -471,19 +471,9 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
   // 칭찬하기
   const handlePraise = async (targetId: string, targetName: string) => {
     if (!user) return;
-    const { error } = await supabase.from('praises').insert({
-      praiser_id: user.id,
-      praised_user_id: targetId,
-      party_id: pod.id
-    });
-    if (error?.code === '23505') {
-      toast.info('이미 칭찬한 멤버입니다.');
-      return;
-    }
-    if (error) { toast.error('칭찬 전송 실패'); return; }
-
-    // 매너온도 +0.5
-    await supabase.rpc('increment_manner_score', { target_user_id: targetId, delta: 0.5 });
+    const result = await sendPraise(targetId, pod.id);
+    if (result.alreadyPraised) { toast.info('이미 칭찬한 멤버입니다.'); return; }
+    if (result.error) { toast.error('칭찬 전송 실패'); return; }
     toast.success(`${targetName}님을 칭찬했어요! 👍`);
     haptics.success();
   };

@@ -2,6 +2,19 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+
+async function adminAction(action: string, payload: object) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const res = await fetch('/api/admin/action', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session?.access_token ?? ''}`,
+    },
+    body: JSON.stringify({ action, payload }),
+  });
+  return res.json();
+}
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { Trash2, ShieldAlert, ArrowRight, CheckCircle, XCircle, Ban, Users, BarChart3 } from 'lucide-react';
@@ -55,39 +68,39 @@ export default function AdminPage() {
   };
 
   const deleteComment = async (id: string) => {
-    const { error } = await supabase.from('comments').delete().eq('id', id);
-    if (error) { toast.error('삭제 실패: ' + error.message); return; }
+    const result = await adminAction('deleteComment', { commentId: id });
+    if (result.error) { toast.error('삭제 실패: ' + result.error); return; }
     setComments(prev => prev.filter(c => c.id !== id));
     toast.success('댓글이 삭제됐습니다.');
   };
 
   const cancelPod = async (id: string) => {
-    const { error } = await supabase.from('parties').update({ status: 'cancelled' }).eq('id', id);
-    if (error) { toast.error('취소 실패: ' + error.message); return; }
+    const result = await adminAction('cancelPod', { podId: id });
+    if (result.error) { toast.error('취소 실패: ' + result.error); return; }
     setPods(prev => prev.map(p => p.id === id ? { ...p, status: 'cancelled' } : p));
     toast.success('팟이 취소됐습니다.');
   };
 
   // 신고 확정 → 피신고자 매너온도 -1
   const confirmReport = async (report: any) => {
-    await supabase.rpc('increment_manner_score', { target_user_id: report.reported_user_id, delta: -1 });
-    await supabase.from('reports').update({ resolved: true, resolution: 'confirmed' }).eq('id', report.id);
+    const result = await adminAction('confirmReport', { reportId: report.id, reportedUserId: report.reported_user_id });
+    if (result.error) { toast.error('처리 실패: ' + result.error); return; }
     setReports(prev => prev.map(r => r.id === report.id ? { ...r, resolved: true, resolution: 'confirmed' } : r));
     toast.success(`신고 확정 - ${report.reported?.nickname}님 매너온도 -1`);
   };
 
   // 허위 신고 → 신고자 매너온도 -0.5
   const dismissReport = async (report: any) => {
-    await supabase.rpc('increment_manner_score', { target_user_id: report.reporter_id, delta: -0.5 });
-    await supabase.from('reports').update({ resolved: true, resolution: 'dismissed' }).eq('id', report.id);
+    const result = await adminAction('dismissReport', { reportId: report.id, reporterId: report.reporter_id });
+    if (result.error) { toast.error('처리 실패: ' + result.error); return; }
     setReports(prev => prev.map(r => r.id === report.id ? { ...r, resolved: true, resolution: 'dismissed' } : r));
     toast.success(`허위 신고 처리 - ${report.reporter?.nickname}님 매너온도 -0.5`);
   };
 
   // 사용자 정지/정지 해제
   const toggleBan = async (userId: string, isBanned: boolean) => {
-    const { error } = await supabase.from('users').update({ is_banned: !isBanned }).eq('id', userId);
-    if (error) { toast.error('처리 실패: ' + error.message); return; }
+    const result = await adminAction('toggleBan', { userId, isBanned });
+    if (result.error) { toast.error('처리 실패: ' + result.error); return; }
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, is_banned: !isBanned } : u));
     toast.success(isBanned ? '정지가 해제됐습니다.' : '사용자가 정지됐습니다.');
   };

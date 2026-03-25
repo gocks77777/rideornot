@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ThumbsUp, X, CheckCircle } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { sendPraise } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { haptics } from '@/lib/haptics';
 
@@ -31,20 +31,15 @@ export function PraisePromptSheet({ isOpen, onClose, userId, parties, onPraised 
     const key = `${partyId}-${targetId}`;
     setPraising(key);
 
-    const { error } = await supabase.from('praises').insert({
-      praiser_id: userId,
-      praised_user_id: targetId,
-      party_id: partyId
-    });
+    const result = await sendPraise(targetId, partyId);
 
-    if (error && error.code !== '23505') {
+    if (result.error) {
       toast.error('칭찬 전송 실패');
       setPraising(null);
       return;
     }
 
-    if (!error) {
-      await supabase.rpc('increment_manner_score', { target_user_id: targetId, delta: 0.5 });
+    if (!result.alreadyPraised) {
       toast.success(`${targetName}님을 칭찬했어요! 👍`);
       haptics.success();
     }
