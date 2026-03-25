@@ -166,24 +166,40 @@ export default function Home() {
     }
   };
 
+  const checkBanStatus = async (userId: string) => {
+    const { data } = await supabase.from('users').select('is_banned').eq('id', userId).single();
+    if (data?.is_banned) {
+      await supabase.auth.signOut();
+      toast.error('이용이 정지된 계정입니다. 문의: gocks77777@naver.com');
+      return true;
+    }
+    return false;
+  };
+
   useEffect(() => {
     // Session 체크
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       const currentUser = session?.user ?? null;
-      setUser(currentUser);
       if (currentUser) {
+        const banned = await checkBanStatus(currentUser.id);
+        if (banned) return;
+        setUser(currentUser);
         checkUserGender(currentUser.id);
         fetchPendingPraises(currentUser.id);
       }
     });
 
     // 인증 상태 변화 구독
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       const currentUser = session?.user ?? null;
-      setUser(currentUser);
       if (currentUser) {
+        const banned = await checkBanStatus(currentUser.id);
+        if (banned) return;
+        setUser(currentUser);
         checkUserGender(currentUser.id);
         fetchPendingPraises(currentUser.id);
+      } else {
+        setUser(null);
       }
     });
 
