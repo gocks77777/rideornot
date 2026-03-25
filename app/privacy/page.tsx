@@ -69,7 +69,7 @@ export default function PrivacyPage() {
           <p>개인정보 처리에 관한 문의사항은 아래로 연락해 주세요.</p>
           <p className="mt-2 bg-gray-50 rounded-xl p-4">
             서비스명: 탈래말래<br />
-            문의: 앱 내 댓글 또는 GitHub Issues를 통해 제보 가능
+            문의 이메일: gocks77777@naver.com
           </p>
         </div>
 
