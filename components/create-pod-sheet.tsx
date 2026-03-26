@@ -330,7 +330,7 @@ export function CreatePodSheet({ isOpen, onClose, onSubmit, initialData }: Creat
               <motion.div whileTap={{ scale: 0.98 }} className="mt-6">
                 <Button
                   onClick={handleSubmit}
-                  disabled={!departure || !destination}
+                  disabled={!departure || !destination || (hasDeposit && (!depositAmount || Number(depositAmount) <= 0))}
                   className="w-full h-14 rounded-2xl bg-[#3182F6] text-white font-bold text-base shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   팟 만들기
