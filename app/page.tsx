@@ -675,7 +675,9 @@ export default function Home() {
                 }
               } else {
                 toast.success('팟에 참여했습니다! 🎉');
-                const notifyUsers = selectedPod.participants.map((p: any) => p.id);
+                const notifyUsers = selectedPod.participants
+                  .filter((p: any) => p.memberStatus !== 'rejected')
+                  .map((p: any) => p.id);
                 if (selectedPod.hostId && !notifyUsers.includes(selectedPod.hostId)) {
                   notifyUsers.push(selectedPod.hostId);
                 }
@@ -703,7 +705,7 @@ export default function Home() {
           onClose={() => setSearchSheetOpen(false)}
           onCreatePod={handleOpenCreateSheet}
           onPodClick={setSelectedPodId}
-          allPods={allPods}
+          allPods={visiblePods}
           user={user}
           initialFocus={searchFocus}
         />
