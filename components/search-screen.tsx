@@ -239,7 +239,7 @@ export function SearchScreen({ isOpen, onClose, onCreatePod, onPodClick, allPods
           className="fixed inset-0 bg-white z-50"
           style={{ maxWidth: '480px', margin: '0 auto' }}
         >
-          <header className="sticky top-0 bg-white z-10 px-6 py-4 border-b border-gray-100">
+          <header className="sticky top-0 bg-white z-10 px-6 pb-4 border-b border-gray-100" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}>
             <div className="flex items-center gap-3 mb-4">
               <motion.button
                 whileTap={{ scale: 0.9 }}
