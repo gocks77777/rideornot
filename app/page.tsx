@@ -105,13 +105,12 @@ export default function Home() {
           hostBankAccount: p.host?.bank_account || '',
           estimatedCost: fare,
           participants: p.party_members
-            ?.filter((m: any) => m.status !== 'rejected')
-            .map((m: any) => ({
+            ?.map((m: any) => ({
               id: m.user_id,
               name: m.user?.nickname || '멤버',
               avatar: m.user?.avatar_url || '',
               paid: m.status === 'paid',
-              memberStatus: m.status  // 'pending' | 'joined' | 'paid'
+              memberStatus: m.status  // 'pending' | 'joined' | 'paid' | 'rejected'
             })) || []
         };
       });
@@ -361,7 +360,6 @@ export default function Home() {
       status: 'joined'
     });
 
-    console.log('New pod created successfully:', newPod);
     fetchPods(); // reload
   };
 

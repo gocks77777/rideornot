@@ -26,7 +26,7 @@ interface Participant {
   name: string;
   avatar?: string;
   paid?: boolean;
-  memberStatus?: 'pending' | 'joined' | 'paid';
+  memberStatus?: 'pending' | 'joined' | 'paid' | 'rejected';
 }
 
 interface Comment {
@@ -74,13 +74,14 @@ interface PodDetailProps {
 }
 
 export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDetailProps) {
-  const approvedParticipants = pod.participants.filter(p => p.memberStatus !== 'pending');
+  const approvedParticipants = pod.participants.filter(p => p.memberStatus !== 'pending' && p.memberStatus !== 'rejected');
   const emptySlots = pod.maxMembers - approvedParticipants.length;
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
+  const [showRejectedConfirm, setShowRejectedConfirm] = useState(false);
   const [participantsPaidStatus, setParticipantsPaidStatus] = useState<Record<string, boolean>>(
     pod.participants
-      .filter(p => p.memberStatus !== 'pending')
+      .filter(p => p.memberStatus !== 'pending' && p.memberStatus !== 'rejected')
       .reduce((acc, p) => ({ ...acc, [p.id]: p.paid || false }), {})
   );
 
@@ -393,9 +394,13 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
 
   const handleJoinClick = () => {
     if (!user) { toast.error('로그인이 필요합니다.'); return; }
-    const isMemberCheck = pod.participants.some(p => p.id === user?.id);
-    if (isMemberCheck) { toast.info('이미 참여한 팟입니다.'); return; }
+    const myRecord = pod.participants.find(p => p.id === user?.id);
+    if (myRecord && myRecord.memberStatus !== 'rejected') { toast.info('이미 참여한 팟입니다.'); return; }
     haptics.light();
+    if (myRecord?.memberStatus === 'rejected') {
+      setShowRejectedConfirm(true);
+      return;
+    }
     if (pod.hasDeposit) {
       setShowPaymentModal(true);
     } else {
@@ -460,8 +465,9 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
   };
 
   const myParticipation = user ? pod.participants.find(p => p.id === user.id) : null;
-  const isMember = !!myParticipation && myParticipation.memberStatus !== 'pending';
+  const isMember = !!myParticipation && myParticipation.memberStatus !== 'pending' && myParticipation.memberStatus !== 'rejected';
   const isPending = !!myParticipation && myParticipation.memberStatus === 'pending';
+  const isRejected = !!myParticipation && myParticipation.memberStatus === 'rejected';
 
   const genderLabel = pod.genderFilter === 'male' ? '남성 전용' : pod.genderFilter === 'female' ? '여성 전용' : null;
 
@@ -785,7 +791,7 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
       </div>
 
       {/* 하단 버튼 */}
-      {!isHost && !isMember && !isPending && (
+      {!isHost && !isMember && !isPending && !isRejected && (
         <div className="fixed bottom-0 left-0 right-0 p-6 bg-white border-t border-gray-100" style={{ maxWidth: '480px', margin: '0 auto' }}>
           <Button
             className="w-full bg-[#3182F6] text-white rounded-full py-6 text-lg font-bold shadow-lg hover:bg-[#2968C8]"
@@ -797,6 +803,17 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
                 ? `예약금 ${(pod.depositAmount || 0).toLocaleString()}원 송금 후 신청하기`
                 : '참여하기'
             )}
+          </Button>
+        </div>
+      )}
+
+      {isRejected && !isHost && (
+        <div className="fixed bottom-0 left-0 right-0 p-6 bg-white border-t border-gray-100" style={{ maxWidth: '480px', margin: '0 auto' }}>
+          <Button
+            className="w-full bg-gray-100 text-gray-600 rounded-full py-6 text-lg font-bold hover:bg-gray-200"
+            onClick={() => setShowRejectedConfirm(true)}
+          >
+            재신청하기
           </Button>
         </div>
       )}
@@ -903,6 +920,23 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
           <AlertDialogFooter>
             <AlertDialogCancel>취소</AlertDialogCancel>
             <AlertDialogAction onClick={() => { setShowJoinConfirm(false); onJoin?.(); }} className="bg-[#3182F6] hover:bg-[#2968C8]">참여하기</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* 거절된 멤버 재신청 확인 */}
+      <AlertDialog open={showRejectedConfirm} onOpenChange={setShowRejectedConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>재신청할까요?</AlertDialogTitle>
+            <AlertDialogDescription>
+              이전에 거절된 팟이에요. 다시 신청하면 방장의 승인을 기다려야 합니다.
+              {pod.hasDeposit && ` 예약금 ${(pod.depositAmount || 0).toLocaleString()}원을 먼저 송금해주세요.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setShowRejectedConfirm(false); onJoin?.(); }} className="bg-[#3182F6] hover:bg-[#2968C8]">재신청하기</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
