@@ -186,20 +186,7 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
       .eq('party_id', pod.id)
       .eq('user_id', user.id);
     if (error) { toast.error('나가기 실패: ' + error.message); return; }
-
-    // 인원 감소 + full 상태였으면 recruiting으로 복원
-    const { data: partyRow } = await supabase
-      .from('parties')
-      .select('current_member, status, max_member')
-      .eq('id', pod.id)
-      .single();
-    if (partyRow && partyRow.current_member > 1) {
-      const newCount = partyRow.current_member - 1;
-      const shouldReopen = partyRow.status === 'full' && newCount < partyRow.max_member;
-      await supabase.from('parties')
-        .update({ current_member: newCount, ...(shouldReopen && { status: 'recruiting' }) })
-        .eq('id', pod.id);
-    }
+    // current_member와 status는 trg_sync_party_member_count 트리거가 자동 처리
 
     haptics.medium();
     toast.success('팟에서 나왔어요.');
