@@ -9,7 +9,7 @@ const privateVapidKey = process.env.VAPID_PRIVATE_KEY!;
 // 이메일은 푸시 서비스 제공자(구글/애플 등)가 연락할 수 있는 용도로 사용됨
 if (publicVapidKey && privateVapidKey) {
   webpush.setVapidDetails(
-    'mailto:your-email@example.com',
+    'mailto:gocks77777@naver.com',
     publicVapidKey,
     privateVapidKey
   );

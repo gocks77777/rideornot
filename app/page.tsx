@@ -334,6 +334,8 @@ export default function Home() {
         departure_time: new Date(data.departureTime).toISOString(),
         max_member: data.maxMembers,
         gender_filter: data.genderPreference,
+        has_deposit: data.hasDeposit,
+        deposit_amount: data.hasDeposit ? data.depositAmount : null,
         status: 'recruiting',
         current_member: 1
       })

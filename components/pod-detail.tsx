@@ -141,25 +141,12 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
   }, [isHost, pod.hasDeposit, pod.id]);
 
   const handleApproveMember = async (userId: string) => {
-    const { error } = await supabase
-      .from('party_members')
-      .update({ status: 'joined' })
-      .eq('party_id', pod.id)
-      .eq('user_id', userId);
+    const { data, error } = await supabase.rpc('approve_member', {
+      p_party_id: pod.id,
+      p_user_id: userId,
+    });
     if (error) { toast.error('승인 실패: ' + error.message); return; }
-
-    const { data: partyRow } = await supabase
-      .from('parties')
-      .select('current_member, max_member')
-      .eq('id', pod.id)
-      .single();
-    if (partyRow) {
-      const newCount = partyRow.current_member + 1;
-      const isFull = newCount >= partyRow.max_member;
-      await supabase.from('parties')
-        .update({ current_member: newCount, ...(isFull && { status: 'full' }) })
-        .eq('id', pod.id);
-    }
+    if (data?.error === 'full') { toast.error('이미 가득 찬 팟입니다.'); return; }
 
     setPendingMembers(prev => prev.filter(m => m.userId !== userId));
     haptics.success();
@@ -200,15 +187,17 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
       .eq('user_id', user.id);
     if (error) { toast.error('나가기 실패: ' + error.message); return; }
 
-    // 인원 감소
+    // 인원 감소 + full 상태였으면 recruiting으로 복원
     const { data: partyRow } = await supabase
       .from('parties')
-      .select('current_member')
+      .select('current_member, status, max_member')
       .eq('id', pod.id)
       .single();
     if (partyRow && partyRow.current_member > 1) {
+      const newCount = partyRow.current_member - 1;
+      const shouldReopen = partyRow.status === 'full' && newCount < partyRow.max_member;
       await supabase.from('parties')
-        .update({ current_member: partyRow.current_member - 1 })
+        .update({ current_member: newCount, ...(shouldReopen && { status: 'recruiting' }) })
         .eq('id', pod.id);
     }
 
