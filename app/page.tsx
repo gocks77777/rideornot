@@ -654,15 +654,7 @@ export default function Home() {
                 return;
               }
 
-              // 예약금 없는 팟만 즉시 인원 증가
-              if (!isDepositPod) {
-                const newCount = party.current_member + 1;
-                const isFull = newCount >= party.max_member;
-                await supabase.from('parties').update({
-                  current_member: newCount,
-                  ...(isFull && { status: 'full' })
-                }).eq('id', selectedPod.id);
-              }
+              // current_member는 trg_sync_party_member_count 트리거가 자동 처리
 
               // 성공 처리
               haptics.success();

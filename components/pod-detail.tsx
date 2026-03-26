@@ -88,6 +88,7 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [showJoinConfirm, setShowJoinConfirm] = useState(false);
 
   // Report modal
   const [reportTarget, setReportTarget] = useState<{ userId: string; userName: string } | null>(null);
@@ -394,8 +395,12 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
     if (!user) { toast.error('로그인이 필요합니다.'); return; }
     const isMemberCheck = pod.participants.some(p => p.id === user?.id);
     if (isMemberCheck) { toast.info('이미 참여한 팟입니다.'); return; }
-    setShowPaymentModal(true);
     haptics.light();
+    if (pod.hasDeposit) {
+      setShowPaymentModal(true);
+    } else {
+      setShowJoinConfirm(true);
+    }
   };
 
   const handlePaymentConfirm = () => {
@@ -877,11 +882,27 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
             <AlertDialogTitle>팟에서 나갈까요?</AlertDialogTitle>
             <AlertDialogDescription>
               팟을 나가면 방장에게 알림이 전송됩니다. 다시 참여하려면 재신청해야 합니다.
+              {pod.hasDeposit && ' 예약금은 방장에게 직접 환불 요청해주세요.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>취소</AlertDialogCancel>
             <AlertDialogAction onClick={handleLeavePod} className="bg-gray-500 hover:bg-gray-600">나가기</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={showJoinConfirm} onOpenChange={setShowJoinConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>팟에 참여할까요?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pod.departure} → {pod.destination} 팟에 참여합니다. 택시비는 탑승 후 정산해주세요.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setShowJoinConfirm(false); onJoin?.(); }} className="bg-[#3182F6] hover:bg-[#2968C8]">참여하기</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
