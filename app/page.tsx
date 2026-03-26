@@ -526,6 +526,32 @@ export default function Home() {
                 </div>
               </motion.div>
 
+              {/* 광고 배너 */}
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15 }}
+                className="px-6 mb-4"
+              >
+                <a
+                  href="mailto:gocks77777@naver.com?subject=탈래말래 배너 광고 문의"
+                  className="block w-full rounded-2xl overflow-hidden"
+                  style={{ background: 'linear-gradient(135deg, #6366f1 0%, #3182F6 60%, #06b6d4 100%)' }}
+                >
+                  <div className="px-5 py-4 flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-bold text-white/70 uppercase tracking-wide">AD</span>
+                        <span className="text-xs font-bold text-yellow-300 bg-yellow-400/20 px-2 py-0.5 rounded-full">선착순 3명</span>
+                      </div>
+                      <p className="text-white font-bold text-[15px] leading-snug">무료 배너 광고 이벤트 🎉</p>
+                      <p className="text-white/70 text-xs mt-0.5">gocks77777@naver.com 으로 문의하세요</p>
+                    </div>
+                    <div className="text-white/80 text-xl ml-3 flex-shrink-0">→</div>
+                  </div>
+                </a>
+              </motion.div>
+
               {pendingPraiseParties.length > 0 && (
                 <motion.div
                   initial={{ opacity: 0, y: -10 }}
@@ -565,10 +591,29 @@ export default function Home() {
               exit="exit"
               transition={{ duration: 0.3 }}
             >
-              <header className="px-6 pt-8 pb-6">
+              <header className="px-6 pt-8 pb-4">
                 <h1 className="text-3xl font-bold text-[#191F28]">팟 목록</h1>
                 <p className="text-gray-600 mt-1">모집중인 택시팟을 확인하세요</p>
               </header>
+              <div className="px-6 mb-4">
+                <a
+                  href="mailto:gocks77777@naver.com?subject=탈래말래 배너 광고 문의"
+                  className="block w-full rounded-2xl overflow-hidden"
+                  style={{ background: 'linear-gradient(135deg, #6366f1 0%, #3182F6 60%, #06b6d4 100%)' }}
+                >
+                  <div className="px-5 py-4 flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-bold text-white/70 uppercase tracking-wide">AD</span>
+                        <span className="text-xs font-bold text-yellow-300 bg-yellow-400/20 px-2 py-0.5 rounded-full">선착순 3명</span>
+                      </div>
+                      <p className="text-white font-bold text-[15px] leading-snug">무료 배너 광고 이벤트 🎉</p>
+                      <p className="text-white/70 text-xs mt-0.5">gocks77777@naver.com 으로 문의하세요</p>
+                    </div>
+                    <div className="text-white/80 text-xl ml-3 flex-shrink-0">→</div>
+                  </div>
+                </a>
+              </div>
               {isLoading ? (
                 <PodListSkeleton />
               ) : fetchError ? (
