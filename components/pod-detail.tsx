@@ -78,6 +78,9 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
   const emptySlots = pod.maxMembers - approvedParticipants.length;
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
+  const [isLeaving, setIsLeaving] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
   const [showRejectedConfirm, setShowRejectedConfirm] = useState(false);
   const [participantsPaidStatus, setParticipantsPaidStatus] = useState<Record<string, boolean>>(
     pod.participants
@@ -182,11 +185,13 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
   // 팟 나가기
   const handleLeavePod = async () => {
     if (!user) return;
+    setIsLeaving(true);
     const { error } = await supabase
       .from('party_members')
       .delete()
       .eq('party_id', pod.id)
       .eq('user_id', user.id);
+    setIsLeaving(false);
     if (error) { toast.error('나가기 실패: ' + error.message); return; }
     // current_member와 status는 trg_sync_party_member_count 트리거가 자동 처리
 
@@ -415,11 +420,13 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
 
   const handleCancelPod = async () => {
     haptics.heavy();
+    setIsCancelling(true);
     const { error } = await supabase
       .from('parties')
       .update({ status: 'cancelled' })
       .eq('id', pod.id)
       .eq('host_id', user.id);
+    setIsCancelling(false);
 
     if (error) {
       toast.error(`팟 취소에 실패했습니다: ${error.message}`);
@@ -441,11 +448,13 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
 
   const handleCompletePod = async () => {
     haptics.success();
+    setIsCompleting(true);
     const { error } = await supabase
       .from('parties')
       .update({ status: 'completed' })
       .eq('id', pod.id)
       .eq('host_id', user.id);
+    setIsCompleting(false);
     if (error) {
       toast.error(`이용 완료 처리에 실패했습니다: ${error.message}`);
     } else {
@@ -830,9 +839,10 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
         <div className="fixed bottom-0 left-0 right-0 p-6 bg-white border-t border-gray-100 flex gap-3" style={{ maxWidth: '480px', margin: '0 auto' }}>
           <Button
             onClick={() => setShowLeaveConfirm(true)}
+            disabled={isLeaving}
             className="flex-none bg-gray-100 text-gray-500 hover:bg-gray-200 rounded-full py-6 px-5 font-bold transition-colors"
           >
-            <LogOut className="w-5 h-5" />
+            {isLeaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <LogOut className="w-5 h-5" />}
           </Button>
           <Button disabled className="flex-1 bg-gray-200 text-gray-500 rounded-full py-6 text-lg font-bold cursor-not-allowed">
             참여 완료 ✅
@@ -842,11 +852,11 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
 
       {isHost && (
         <div className="fixed bottom-0 left-0 right-0 p-6 bg-white border-t border-gray-100 flex gap-2" style={{ maxWidth: '480px', margin: '0 auto' }}>
-          <Button onClick={() => setShowCancelConfirm(true)} className="flex-1 bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-600 rounded-full py-6 text-lg font-bold transition-colors">
-            취소(폭파)
+          <Button onClick={() => setShowCancelConfirm(true)} disabled={isCancelling || isCompleting} className="flex-1 bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-600 rounded-full py-6 text-lg font-bold transition-colors">
+            {isCancelling ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : '취소(폭파)'}
           </Button>
-          <Button onClick={() => setShowCompleteConfirm(true)} className="flex-1 bg-[#3182F6] text-white hover:bg-[#2968C8] rounded-full py-6 text-lg font-bold transition-colors">
-            이용 완료
+          <Button onClick={() => setShowCompleteConfirm(true)} disabled={isCancelling || isCompleting} className="flex-1 bg-[#3182F6] text-white hover:bg-[#2968C8] rounded-full py-6 text-lg font-bold transition-colors">
+            {isCompleting ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : '이용 완료'}
           </Button>
         </div>
       )}
@@ -871,7 +881,7 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>아니요</AlertDialogCancel>
-            <AlertDialogAction onClick={handleCancelPod} className="bg-red-500 hover:bg-red-600">폭파하기</AlertDialogAction>
+            <AlertDialogAction onClick={handleCancelPod} disabled={isCancelling} className="bg-red-500 hover:bg-red-600">폭파하기</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -887,7 +897,7 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>아니요</AlertDialogCancel>
-            <AlertDialogAction onClick={handleCompletePod} className="bg-[#3182F6] hover:bg-[#2968C8]">완료하기</AlertDialogAction>
+            <AlertDialogAction onClick={handleCompletePod} disabled={isCompleting} className="bg-[#3182F6] hover:bg-[#2968C8]">완료하기</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -904,7 +914,7 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>취소</AlertDialogCancel>
-            <AlertDialogAction onClick={handleLeavePod} className="bg-gray-500 hover:bg-gray-600">나가기</AlertDialogAction>
+            <AlertDialogAction onClick={handleLeavePod} disabled={isLeaving} className="bg-gray-500 hover:bg-gray-600">나가기</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

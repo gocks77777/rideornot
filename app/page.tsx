@@ -363,7 +363,14 @@ export default function Home() {
     fetchPods(); // reload
   };
 
-  const livePods = allPods.slice(0, 3).map(pod => ({
+  // 성별 필터 적용: 'any'는 모두 표시, 'male'/'female'은 userGender가 일치하거나 로그인 안 한 경우만 표시
+  const visiblePods = allPods.filter(pod => {
+    if (pod.genderFilter === 'any') return true;
+    if (!userGender) return false; // 성별 미설정 사용자에게는 성별 제한 팟 숨김
+    return pod.genderFilter === userGender;
+  });
+
+  const livePods = visiblePods.slice(0, 3).map(pod => ({
     id: pod.id,
     departure: pod.departure,
     destination: pod.destination,
@@ -542,7 +549,7 @@ export default function Home() {
                   </button>
                 </div>
               ) : (
-                <PodList pods={allPods} onPodClick={setSelectedPodId} />
+                <PodList pods={visiblePods} onPodClick={setSelectedPodId} />
               )}
             </motion.div>
           )}
