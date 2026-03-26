@@ -67,6 +67,7 @@ export default function Home() {
       `)
       .gte('departure_time', now) // 현재 시간 이후에 출발하는 팟만 필터링
       .neq('status', 'cancelled') // 취소된 팟 제외
+      .neq('status', 'completed') // 완료된 팟 제외
       .order('departure_time', { ascending: true });
 
     if (data) {

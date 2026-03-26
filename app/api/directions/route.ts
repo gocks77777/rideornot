@@ -28,10 +28,6 @@ export async function GET(request: Request) {
 
     const url = `https://maps.apigw.ntruss.com/map-direction/v1/driving?start=${start}&goal=${goal}`;
 
-    console.log('Directions API request:', url);
-    console.log('Client ID exists:', !!clientId, '/ length:', clientId?.length);
-    console.log('Client Secret exists:', !!clientSecret, '/ length:', clientSecret?.length);
-
     const response = await fetch(url, {
       headers: {
         'X-NCP-APIGW-API-KEY-ID': clientId,
