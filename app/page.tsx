@@ -52,6 +52,7 @@ export default function Home() {
   const [currentLocationName, setCurrentLocationName] = useState<string | null>(null);
   const [pendingPraiseParties, setPendingPraiseParties] = useState<PendingPraiseParty[]>([]);
   const [praiseSheetOpen, setPraiseSheetOpen] = useState(false);
+  const [isPushEnabled, setIsPushEnabled] = useState<boolean | null>(null);
 
   const fetchPods = async () => {
     setIsLoading(true);
@@ -186,6 +187,15 @@ export default function Home() {
     // OAuth 콜백 해시 제거 (뒤로가기 시 재처리 방지)
     if (window.location.hash.includes('access_token')) {
       window.history.replaceState({}, '', window.location.pathname);
+    }
+
+    // 푸시 알림 활성화 여부 체크
+    if ('Notification' in window && Notification.permission === 'granted' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistration().then(reg => {
+        reg?.pushManager.getSubscription().then(sub => setIsPushEnabled(!!sub));
+      });
+    } else {
+      setIsPushEnabled(false);
     }
 
     // Session 체크
@@ -424,16 +434,34 @@ export default function Home() {
                     </span>
                   </div>
                 )}
-                <motion.button
-                  whileTap={{ scale: 0.9 }}
-                  onClick={() => {
-                    haptics.light();
-                    setPushGuideOpen(true);
-                  }}
-                  className="w-10 h-10 rounded-full bg-[#F2F4F6] flex items-center justify-center active:bg-gray-200 transition-colors"
-                >
-                  <Bell className="w-5 h-5 text-gray-600" />
-                </motion.button>
+                <div className="flex items-center gap-2">
+                  {isPushEnabled === false && (
+                    <motion.div
+                      className="flex items-center gap-1 cursor-pointer"
+                      animate={{ x: [0, 5, 0] }}
+                      transition={{ repeat: Infinity, duration: 1.1, ease: 'easeInOut' }}
+                      onClick={() => { haptics.light(); setPushGuideOpen(true); }}
+                    >
+                      <span className="text-xs font-bold text-white bg-[#3182F6] px-2.5 py-1 rounded-full whitespace-nowrap shadow-sm">
+                        알림 켜기!
+                      </span>
+                      <span className="text-[#3182F6] font-bold text-base leading-none">→</span>
+                    </motion.div>
+                  )}
+                  <motion.button
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => {
+                      haptics.light();
+                      setPushGuideOpen(true);
+                    }}
+                    className="w-10 h-10 rounded-full bg-[#F2F4F6] flex items-center justify-center active:bg-gray-200 transition-colors relative"
+                  >
+                    <Bell className="w-5 h-5 text-gray-600" />
+                    {isPushEnabled === false && (
+                      <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
+                    )}
+                  </motion.button>
+                </div>
               </header>
 
               <motion.div
@@ -717,7 +745,15 @@ export default function Home() {
 
         <PushGuideSheet
           isOpen={pushGuideOpen}
-          onClose={() => setPushGuideOpen(false)}
+          onClose={() => {
+            setPushGuideOpen(false);
+            // 시트 닫힐 때 push 상태 재확인
+            if ('Notification' in window && Notification.permission === 'granted' && 'serviceWorker' in navigator) {
+              navigator.serviceWorker.getRegistration().then(reg => {
+                reg?.pushManager.getSubscription().then(sub => setIsPushEnabled(!!sub));
+              });
+            }
+          }}
           user={user}
         />
 
