@@ -83,7 +83,7 @@ function ParticipantsModal({ isOpen, onClose, participants }: ParticipantsModalP
   );
 }
 
-export function MyPage({ user, onRecreatePod, onBankAccountSaved }: { user?: any; onRecreatePod?: (pod: Pod) => void; onBankAccountSaved?: (account: string) => void }) {
+export function MyPage({ user, onRecreatePod, onBankAccountSaved, onLogout }: { user?: any; onRecreatePod?: (pod: Pod) => void; onBankAccountSaved?: (account: string) => void; onLogout?: () => void }) {
   const [mannerTemp, setMannerTemp] = useState(36.5);
   const [bankAccount, setBankAccount] = useState('');
   const [isEditingAccount, setIsEditingAccount] = useState(false);
@@ -271,14 +271,18 @@ export function MyPage({ user, onRecreatePod, onBankAccountSaved }: { user?: any
 
   const handleKakaoLogin = async () => {
     haptics.light();
-    await supabase.auth.signInWithOAuth({
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: 'kakao',
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
+    if (error) toast.error('로그인에 실패했습니다. 다시 시도해주세요.');
   };
 
   const handleLogout = async () => {
-    haptics.light();
+    haptics.medium();
     await supabase.auth.signOut();
+    toast.success('로그아웃됐습니다.');
+    onLogout?.();
   };
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);

@@ -25,7 +25,8 @@ export function ReportModal({ isOpen, onClose, reportedUserId, reportedUserName,
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async () => {
-    if (!selectedReason || !reporterId) return;
+    if (!selectedReason) return;
+    if (!reporterId) { toast.error('로그인이 필요합니다.'); return; }
     setIsSubmitting(true);
 
     const { error } = await supabase.from('reports').insert({
