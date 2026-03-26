@@ -29,6 +29,6 @@ export function sendPush(payload: { userId: string; title: string; body?: string
         'Authorization': `Bearer ${session.access_token}`,
       },
       body: JSON.stringify(payload),
-    });
+    }).catch(err => console.error('[sendPush] failed:', err));
   });
 }

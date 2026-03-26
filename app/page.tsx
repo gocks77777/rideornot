@@ -183,6 +183,11 @@ export default function Home() {
   };
 
   useEffect(() => {
+    // OAuth 콜백 해시 제거 (뒤로가기 시 재처리 방지)
+    if (window.location.hash.includes('access_token')) {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+
     // Session 체크
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       const currentUser = session?.user ?? null;

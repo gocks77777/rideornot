@@ -19,8 +19,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { Trash2, ShieldAlert, ArrowRight, CheckCircle, XCircle, Ban, Users, BarChart3 } from 'lucide-react';
 
-const ADMIN_EMAILS = ['gocks77777@naver.com'];
-
 export default function AdminPage() {
   const [user, setUser] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -33,12 +31,17 @@ export default function AdminPage() {
   const [stats, setStats] = useState({ totalPods: 0, activePods: 0, totalUsers: 0, totalReports: 0 });
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       const u = session?.user ?? null;
       setUser(u);
-      const admin = ADMIN_EMAILS.includes(u?.email || '');
-      setIsAdmin(admin);
-      if (admin) fetchAll();
+      if (!u || !session) { setLoading(false); return; }
+      const res = await fetch('/api/admin/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        body: JSON.stringify({ action: 'ping', payload: {} }),
+      });
+      const data = await res.json();
+      if (data.isAdmin) { setIsAdmin(true); fetchAll(); }
       setLoading(false);
     });
   }, []);

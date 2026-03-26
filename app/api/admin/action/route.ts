@@ -24,6 +24,8 @@ export async function POST(request: Request) {
     const { action, payload } = await request.json();
 
     switch (action) {
+      case 'ping':
+        return NextResponse.json({ isAdmin: true });
       case 'confirmReport': {
         const { reportId, reportedUserId } = payload;
         await supabaseAdmin.rpc('increment_manner_score', { target_user_id: reportedUserId, delta: -1 });

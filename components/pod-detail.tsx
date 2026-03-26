@@ -103,6 +103,7 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
   const [routeDuration, setRouteDuration] = useState<number | null>(null);
   const [routeDistance, setRouteDistance] = useState<number | null>(null);
   const [mapLoading, setMapLoading] = useState(true);
+  const [mapLoadError, setMapLoadError] = useState(false);
 
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentInput, setCommentInput] = useState('');
@@ -294,7 +295,7 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
         const interval = setInterval(() => {
           attempts++;
           if ((window as any).naver?.maps) { clearInterval(interval); initMap(); }
-          else if (attempts > 20) clearInterval(interval);
+          else if (attempts > 20) { clearInterval(interval); setMapLoadError(true); setMapLoading(false); }
         }, 300);
       }
     }, 300);
@@ -508,12 +509,17 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
         {/* 지도 */}
         {hasCoords ? (
           <div className="relative rounded-3xl overflow-hidden h-56 bg-gray-100 z-0">
-            {mapLoading && (
+            {mapLoading && !mapLoadError && (
               <div className="absolute inset-0 bg-gray-200 z-10 flex items-center justify-center">
                 <div className="flex flex-col items-center gap-2">
                   <div className="w-8 h-8 border-3 border-gray-300 border-t-[#3182F6] rounded-full animate-spin" style={{ borderWidth: '3px' }} />
                   <p className="text-xs text-gray-400 font-medium">경로 불러오는 중...</p>
                 </div>
+              </div>
+            )}
+            {mapLoadError && (
+              <div className="absolute inset-0 bg-gray-100 z-10 flex items-center justify-center">
+                <p className="text-xs text-gray-400">지도를 불러올 수 없습니다.</p>
               </div>
             )}
             <div ref={mapRef} className="w-full h-full" />
