@@ -48,12 +48,14 @@ export default function Home() {
   const [userGender, setUserGender] = useState<'male' | 'female' | null>(null);
   const [allPods, setAllPods] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
   const [currentLocationName, setCurrentLocationName] = useState<string | null>(null);
   const [pendingPraiseParties, setPendingPraiseParties] = useState<PendingPraiseParty[]>([]);
   const [praiseSheetOpen, setPraiseSheetOpen] = useState(false);
 
   const fetchPods = async () => {
     setIsLoading(true);
+    setFetchError(false);
     
     // 현재 시간 구하기 (ISO 포맷)
     const now = new Date().toISOString();
@@ -114,6 +116,9 @@ export default function Home() {
         };
       });
       setAllPods(formatted);
+    } else if (error) {
+      console.error('fetchPods error:', error);
+      setFetchError(true);
     }
     setIsLoading(false);
   };
@@ -528,6 +533,16 @@ export default function Home() {
               </header>
               {isLoading ? (
                 <PodListSkeleton />
+              ) : fetchError ? (
+                <div className="flex flex-col items-center justify-center py-20 px-6">
+                  <p className="text-gray-500 mb-4">팟 목록을 불러오지 못했어요.</p>
+                  <button
+                    onClick={fetchPods}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-[#3182F6] text-white rounded-full text-sm font-semibold"
+                  >
+                    <RefreshCw className="w-4 h-4" /> 다시 시도
+                  </button>
+                </div>
               ) : (
                 <PodList pods={allPods} onPodClick={setSelectedPodId} />
               )}
