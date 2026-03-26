@@ -284,7 +284,7 @@ export default function Home() {
       toast.error('로그인이 필요합니다.');
       return;
     }
-    if (!userBankAccount) {
+    if (userBankAccount === null) {
       toast.error('팟을 만들려면 먼저 계좌번호를 등록해주세요!', {
         description: '마이페이지 → 계좌 정보에서 등록할 수 있어요.',
         duration: 4000,
