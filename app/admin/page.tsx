@@ -162,7 +162,7 @@ export default function AdminPage() {
       </div>
 
       <Tabs defaultValue="reports">
-        <TabsList className="mb-6 flex flex-wrap gap-1">
+        <TabsList className="mb-6 flex flex-nowrap gap-1 overflow-x-auto">
           <TabsTrigger value="reports">
             신고 관리 {pendingReports.length > 0 && <span className="ml-1 bg-red-500 text-white text-xs rounded-full px-1.5">{pendingReports.length}</span>}
           </TabsTrigger>

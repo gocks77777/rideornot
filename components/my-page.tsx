@@ -18,6 +18,7 @@ interface Participant {
 
 export interface Pod {
   id: string;
+  hostId?: string;
   departure: string;
   destination: string;
   departureTime: string;
@@ -83,7 +84,7 @@ function ParticipantsModal({ isOpen, onClose, participants }: ParticipantsModalP
   );
 }
 
-export function MyPage({ user, onRecreatePod, onBankAccountSaved, onLogout }: { user?: any; onRecreatePod?: (pod: Pod) => void; onBankAccountSaved?: (account: string) => void; onLogout?: () => void }) {
+export function MyPage({ user, onRecreatePod, onBankAccountSaved, onLogout, onPodOpen }: { user?: any; onRecreatePod?: (pod: Pod) => void; onBankAccountSaved?: (account: string) => void; onLogout?: () => void; onPodOpen?: (podId: string) => void }) {
   const [mannerTemp, setMannerTemp] = useState(36.5);
   const [bankAccount, setBankAccount] = useState('');
   const [isEditingAccount, setIsEditingAccount] = useState(false);
@@ -118,29 +119,31 @@ export function MyPage({ user, onRecreatePod, onBankAccountSaved, onLogout }: { 
       `)
       .eq("host_id", user.id)
       .order("departure_time", { ascending: false })
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        if (error) console.error('[MyPage] hosting pods error:', error);
         if (data) {
           setHostingPods(data.map(p => ({
             id: p.id,
+            hostId: p.host_id,
             departure: p.start_point,
             destination: p.end_point,
             departureTime: new Date(p.departure_time).toLocaleString("ko-KR", {
               month: "short", day: "numeric", hour: "2-digit", minute: "2-digit"
             }),
             status: p.status as "upcoming" | "completed" | "cancelled",
-              participants: p.party_members?.map((m: any) => ({
-                id: m.user_id,
-                name: m.user?.nickname || "멤버",
-                avatar: m.user?.avatar_url || ""
-              })) || [],
-              startLat: p.start_lat,
-              startLng: p.start_lng,
-              endLat: p.end_lat,
-              endLng: p.end_lng,
-              maxMembers: p.max_member,
-              genderFilter: p.gender_filter,
-              departureDetail: p.departure_detail
-            })));
+            participants: p.party_members?.map((m: any) => ({
+              id: m.user_id,
+              name: m.user?.nickname || "멤버",
+              avatar: m.user?.avatar_url || ""
+            })) || [],
+            startLat: p.start_lat,
+            startLng: p.start_lng,
+            endLat: p.end_lat,
+            endLng: p.end_lng,
+            maxMembers: p.max_member,
+            genderFilter: p.gender_filter,
+            departureDetail: p.departure_detail
+          })));
         }
       });
 
@@ -278,11 +281,11 @@ export function MyPage({ user, onRecreatePod, onBankAccountSaved, onLogout }: { 
     if (error) toast.error('로그인에 실패했습니다. 다시 시도해주세요.');
   };
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
     haptics.medium();
-    await supabase.auth.signOut();
     toast.success('로그아웃됐습니다.');
     onLogout?.();
+    supabase.auth.signOut().catch(console.error);
   };
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -312,14 +315,15 @@ export function MyPage({ user, onRecreatePod, onBankAccountSaved, onLogout }: { 
     haptics.medium();
     if (!user) return;
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('users')
       .update({ bank_account: bankAccount })
-      .eq('id', user.id);
+      .eq('id', user.id)
+      .select('bank_account');
 
-    if (error) {
+    if (error || !data || data.length === 0) {
       console.error('Error saving bank account:', error);
-      toast.error('계좌 정보 저장 중 오류가 발생했습니다.');
+      toast.error('계좌 정보 저장 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
     } else {
       setIsEditingAccount(false);
       toast.success('계좌번호가 저장됐습니다!');
@@ -534,7 +538,9 @@ export function MyPage({ user, onRecreatePod, onBankAccountSaved, onLogout }: { 
                 whileTap={{ scale: 0.98 }}
                 onClick={() => {
                   haptics.light();
-                  if (pod.participants && pod.participants.length > 0) {
+                  if (onPodOpen) {
+                    onPodOpen(pod.id);
+                  } else if (pod.participants && pod.participants.length > 0) {
                     setSelectedPodParticipants(pod.participants);
                     setShowParticipantsModal(true);
                   }

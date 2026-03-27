@@ -53,11 +53,66 @@ export default function Home() {
   const [pendingPraiseParties, setPendingPraiseParties] = useState<PendingPraiseParty[]>([]);
   const [praiseSheetOpen, setPraiseSheetOpen] = useState(false);
   const [isPushEnabled, setIsPushEnabled] = useState<boolean | null>(null);
+  const [directPod, setDirectPod] = useState<any>(null);
+
+  const formatPodData = (p: any) => {
+    let fare = 12000;
+    if (p.start_lat && p.start_lng && p.end_lat && p.end_lng) {
+      const dist = getDistanceKm(p.start_lat, p.start_lng, p.end_lat, p.end_lng);
+      fare = estimateTaxiFare(dist * 1.3);
+    }
+    return {
+      id: p.id,
+      hostId: p.host_id,
+      departure: p.start_point,
+      departureDetail: p.departure_detail || '',
+      destination: p.end_point,
+      startLat: p.start_lat,
+      startLng: p.start_lng,
+      endLat: p.end_lat,
+      endLng: p.end_lng,
+      currentMembers: p.current_member,
+      maxMembers: p.max_member,
+      genderFilter: p.gender_filter || 'any',
+      hasDeposit: p.has_deposit,
+      depositAmount: p.deposit_amount,
+      departureTime: new Date(p.departure_time).toLocaleString('ko-KR', {
+        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+      }),
+      status: p.status,
+      hostName: p.host?.nickname || '방장',
+      hostBankAccount: p.host?.bank_account || '',
+      estimatedCost: fare,
+      participants: p.party_members?.map((m: any) => ({
+        id: m.user_id,
+        name: m.user?.nickname || '멤버',
+        avatar: m.user?.avatar_url || '',
+        paid: m.status === 'paid',
+        memberStatus: m.status
+      })) || []
+    };
+  };
+
+  const openPodById = async (podId: string) => {
+    const existing = allPods.find(p => p.id === podId);
+    if (existing) { setSelectedPodId(podId); return; }
+    const { data } = await supabase
+      .from('parties')
+      .select(`
+        *,
+        host:users!parties_host_id_fkey(nickname, bank_account),
+        party_members(user_id, status, user:users(nickname, avatar_url))
+      `)
+      .eq('id', podId)
+      .single();
+    if (data) setDirectPod(formatPodData(data));
+  };
 
   const fetchPods = async () => {
     setIsLoading(true);
     setFetchError(false);
-    
+
+    try {
     // 현재 시간 구하기 (ISO 포맷)
     const now = new Date().toISOString();
 
@@ -120,7 +175,12 @@ export default function Home() {
       console.error('fetchPods error:', error);
       setFetchError(true);
     }
-    setIsLoading(false);
+    } catch (e) {
+      console.error('fetchPods exception:', e);
+      setFetchError(true);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const fetchPendingPraises = async (userId: string) => {
@@ -650,6 +710,7 @@ export default function Home() {
                   setIsCreateSheetOpen(true);
                 }}
                 onLogout={() => setActiveTab('home')}
+                onPodOpen={openPodById}
               />
             </motion.div>
           )}
@@ -776,6 +837,16 @@ export default function Home() {
               fetchPods();
             }}
             isHost={selectedPod.hostId === user?.id}
+            user={user}
+          />
+        )}
+
+        {directPod && (
+          <PodDetail
+            pod={directPod}
+            onBack={() => { setDirectPod(null); fetchPods(); }}
+            onJoin={() => { setDirectPod(null); fetchPods(); }}
+            isHost={directPod.hostId === user?.id}
             user={user}
           />
         )}
