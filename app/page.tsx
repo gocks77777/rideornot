@@ -439,10 +439,11 @@ export default function Home() {
     fetchPods(); // reload
   };
 
-  // 성별 필터 적용: 'any'는 모두 표시, 'male'/'female'은 userGender가 일치하거나 로그인 안 한 경우만 표시
+  // 성별 필터 적용: 비로그인 사용자는 전체 표시, 로그인 후 성별 필터 적용
   const visiblePods = allPods.filter(pod => {
+    if (!user) return true; // 비로그인 상태에선 모든 팟 표시
     if (pod.genderFilter === 'any') return true;
-    if (!userGender) return false; // 성별 미설정 사용자에게는 성별 제한 팟 숨김
+    if (!userGender) return false; // 로그인했지만 성별 미설정 시 성별 제한 팟 숨김
     return pod.genderFilter === userGender;
   });
 
