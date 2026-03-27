@@ -109,8 +109,8 @@ export default function Home() {
     if (data) setDirectPod(formatPodData(data));
   };
 
-  const fetchPods = async () => {
-    setIsLoading(true);
+  const fetchPods = async (silent = false) => {
+    if (!silent) setIsLoading(true);
     setFetchError(false);
 
     try {
@@ -304,7 +304,7 @@ export default function Home() {
     const realtimeChannel = supabase
       .channel('parties-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'parties' }, () => {
-        fetchPods();
+        fetchPods(true); // 백그라운드 업데이트 — 로딩 스켈레톤 표시 안 함
       })
       .subscribe();
 
@@ -651,7 +651,7 @@ export default function Home() {
                 <div className="flex flex-col items-center justify-center py-20 px-6">
                   <p className="text-gray-500 mb-4">팟 목록을 불러오지 못했어요.</p>
                   <button
-                    onClick={fetchPods}
+                    onClick={() => fetchPods()}
                     className="flex items-center gap-2 px-5 py-2.5 bg-[#3182F6] text-white rounded-full text-sm font-semibold"
                   >
                     <RefreshCw className="w-4 h-4" /> 다시 시도

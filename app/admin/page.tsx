@@ -139,7 +139,15 @@ export default function AdminPage() {
   return (
     <div className="max-w-4xl mx-auto p-6">
       <h1 className="text-3xl font-bold text-gray-900 mb-2">관리자 대시보드</h1>
-      <p className="text-sm text-gray-500 mb-8">탈래말래 운영 현황을 확인하고 관리합니다.</p>
+      <p className="text-sm text-gray-500">탈래말래 운영 현황을 확인하고 관리합니다.</p>
+      <p className="text-xs text-gray-400 mb-8">
+        🕐 배포 시각: {process.env.NEXT_PUBLIC_BUILD_TIME
+          ? new Date(process.env.NEXT_PUBLIC_BUILD_TIME).toLocaleString('ko-KR', {
+              year: 'numeric', month: '2-digit', day: '2-digit',
+              hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Seoul'
+            })
+          : '알 수 없음'}
+      </p>
 
       {/* 통계 */}
       <div className="grid grid-cols-4 gap-4 mb-8">
