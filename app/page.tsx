@@ -710,7 +710,7 @@ export default function Home() {
                   setCreatePodInitialData(pod);
                   setIsCreateSheetOpen(true);
                 }}
-                onLogout={() => setActiveTab('home')}
+                onLogout={() => { setUser(null); setActiveTab('home'); }}
                 onPodOpen={openPodById}
               />
             </motion.div>
