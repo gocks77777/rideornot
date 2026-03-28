@@ -1,40 +1,71 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+
+const BANNERS = [
+  { id: 'haenyeo', type: 'image' as const },
+  { id: 'event', type: 'text' as const },
+];
 
 export function RotatingBanner() {
   const [current, setCurrent] = useState(0);
+  const touchStartX = useRef(0);
+  const touchEndX = useRef(0);
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setCurrent(prev => (prev + 1) % 2);
+      setCurrent(prev => (prev + 1) % BANNERS.length);
     }, 5000);
     return () => clearInterval(timer);
   }, []);
 
+  const goNext = () => setCurrent(prev => (prev + 1) % BANNERS.length);
+  const goPrev = () => setCurrent(prev => (prev - 1 + BANNERS.length) % BANNERS.length);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    touchEndX.current = e.changedTouches[0].clientX;
+    const diff = touchStartX.current - touchEndX.current;
+    if (Math.abs(diff) > 40) {
+      if (diff > 0) goNext();
+      else goPrev();
+    }
+  };
+
   return (
-    <div className="relative w-full rounded-2xl overflow-hidden" style={{ height: '80px' }}>
+    <div
+      className="relative w-full rounded-2xl overflow-hidden"
+      style={{ height: '80px' }}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
       <AnimatePresence mode="wait">
         {current === 0 ? (
-          <motion.div
+          <motion.a
             key="haenyeo"
+            href="https://map.naver.com/p/entry/place/2091099735?lng=127.318615&lat=36.6219546&placePath=/home"
+            target="_blank"
+            rel="noopener noreferrer"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.5 }}
-            className="absolute inset-0"
+            className="absolute inset-0 block"
           >
             <img
               src="/banners/haenyo-ad.jpg"
-              alt="말자좋은해녀 포차 광고"
+              alt="팔자좋은해녀 포차 광고"
               className="w-full h-full object-cover object-center"
             />
-          </motion.div>
+          </motion.a>
         ) : (
           <motion.a
             key="event"
-            href="mailto:gocks77777@naver.com?subject=탈래말래 배너 광고 문의"
+            href="/ad"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -57,8 +88,12 @@ export function RotatingBanner() {
 
       {/* 인디케이터 dots */}
       <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 flex gap-1 z-10">
-        <div className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${current === 0 ? 'bg-white' : 'bg-white/40'}`} />
-        <div className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${current === 1 ? 'bg-white' : 'bg-white/40'}`} />
+        {BANNERS.map((_, i) => (
+          <div
+            key={i}
+            className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${current === i ? 'bg-white' : 'bg-white/40'}`}
+          />
+        ))}
       </div>
     </div>
   );
