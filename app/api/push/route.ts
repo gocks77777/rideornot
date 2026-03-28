@@ -18,14 +18,17 @@ if (publicVapidKey && privateVapidKey) {
 }
 
 // 관리자 권한이 있는 Supabase 클라이언트 (서비스 롤 키 필요)
-// 사용자의 구독 정보를 읽어오기 위해 사용합니다.
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-// 빌드 시점 등 환경 변수가 없는 경우를 대비하여 조건부 생성
-const supabaseAdmin = supabaseUrl && supabaseServiceKey 
-  ? createClient(supabaseUrl, supabaseServiceKey) 
+const supabaseAdmin = supabaseUrl && supabaseServiceKey
+  ? createClient(supabaseUrl, supabaseServiceKey)
   : null;
+
+// UUID v4 형식 검증
+function isValidUUID(str: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+}
 
 export async function POST(req: Request) {
   try {
@@ -42,11 +45,63 @@ export async function POST(req: Request) {
 
     const { userId, title, body, url } = await req.json();
 
-    if (!userId || !title) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    if (!userId || typeof userId !== 'string' || !isValidUUID(userId)) {
+      return NextResponse.json({ error: 'Invalid userId' }, { status: 400 });
+    }
+    if (!title || typeof title !== 'string' || title.length > 200) {
+      return NextResponse.json({ error: 'Invalid title' }, { status: 400 });
+    }
+    if (body && (typeof body !== 'string' || body.length > 500)) {
+      return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
     }
 
-    // 1. 해당 유저의 푸시 구독 정보(Endpoint 등)를 DB에서 가져옵니다.
+    // 발신자-수신자 관계 검증: 같은 파티에 속해있는 경우만 허용
+    // (자기 자신에게 보내는 것도 차단)
+    if (authUser.id === userId) {
+      return NextResponse.json({ error: 'Cannot send push to yourself' }, { status: 400 });
+    }
+
+    // 발신자가 참여 중인 파티 목록
+    const { data: senderParties } = await supabaseAdmin
+      .from('party_members')
+      .select('party_id')
+      .eq('user_id', authUser.id);
+
+    // 발신자가 방장인 파티 목록
+    const { data: senderHostParties } = await supabaseAdmin
+      .from('parties')
+      .select('id')
+      .eq('host_id', authUser.id);
+
+    const senderPartyIds = new Set([
+      ...(senderParties || []).map(p => p.party_id),
+      ...(senderHostParties || []).map(p => p.id),
+    ]);
+
+    // 수신자가 참여 중인 파티 목록
+    const { data: receiverParties } = await supabaseAdmin
+      .from('party_members')
+      .select('party_id')
+      .eq('user_id', userId);
+
+    // 수신자가 방장인 파티 목록
+    const { data: receiverHostParties } = await supabaseAdmin
+      .from('parties')
+      .select('id')
+      .eq('host_id', userId);
+
+    const receiverPartyIds = new Set([
+      ...(receiverParties || []).map(p => p.party_id),
+      ...(receiverHostParties || []).map(p => p.id),
+    ]);
+
+    // 교집합 확인 — 최소 하나의 공통 파티가 있어야 함
+    const hasCommonParty = Array.from(senderPartyIds).some(id => receiverPartyIds.has(id));
+    if (!hasCommonParty) {
+      return NextResponse.json({ error: 'No common party with target user' }, { status: 403 });
+    }
+
+    // 1. 해당 유저의 푸시 구독 정보를 DB에서 가져옴
     const { data: subscriptions, error } = await supabaseAdmin
       .from('push_subscriptions')
       .select('*')
@@ -82,7 +137,6 @@ export async function POST(req: Request) {
         await webpush.sendNotification(pushSubscription, payload);
       } catch (err: any) {
         console.error('Error sending push to endpoint', sub.endpoint, err);
-        // 구독이 만료되었거나 취소된 경우(HTTP 410, 404), DB에서 삭제 처리
         if ((err.statusCode === 404 || err.statusCode === 410) && supabaseAdmin) {
           await supabaseAdmin.from('push_subscriptions').delete().eq('id', sub.id);
         }

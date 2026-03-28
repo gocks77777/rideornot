@@ -2,6 +2,7 @@
 
 import { Search as Home, List, Plus, User } from 'lucide-react';
 import { haptics } from '@/lib/haptics';
+import { toast } from 'sonner';
 
 interface FloatingNavProps {
   activeTab: string;
@@ -27,7 +28,7 @@ export function FloatingNav({ activeTab, onTabChange, onCreatePod, user }: Float
           onClick={() => {
             haptics.medium();
             if (!user) {
-              alert('로그인이 필요합니다.');
+              toast.error('로그인이 필요합니다.', { description: '프로필 탭에서 카카오 로그인을 해주세요.' });
               return;
             }
             onCreatePod();

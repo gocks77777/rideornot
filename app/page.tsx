@@ -130,48 +130,7 @@ export default function Home() {
       .order('departure_time', { ascending: true });
 
     if (data) {
-      const formatted = data.map(p => {
-        // Calculate taxi fare from coordinates
-        let fare = 12000;
-        if (p.start_lat && p.start_lng && p.end_lat && p.end_lng) {
-          const dist = getDistanceKm(p.start_lat, p.start_lng, p.end_lat, p.end_lng);
-          // Multiply by 1.3 to approximate road distance vs straight line
-          fare = estimateTaxiFare(dist * 1.3);
-        }
-
-        return {
-          id: p.id,
-          hostId: p.host_id,
-          departure: p.start_point,
-          departureDetail: p.departure_detail || '',
-          destination: p.end_point,
-          startLat: p.start_lat,
-          startLng: p.start_lng,
-          endLat: p.end_lat,
-          endLng: p.end_lng,
-          currentMembers: p.current_member,
-          maxMembers: p.max_member,
-          genderFilter: p.gender_filter || 'any',
-          hasDeposit: p.has_deposit,
-          depositAmount: p.deposit_amount,
-          departureTime: new Date(p.departure_time).toLocaleString('ko-KR', {
-            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-          }),
-          status: p.status,
-          hostName: p.host?.nickname || '방장',
-          hostBankAccount: p.host?.bank_account || '',
-          estimatedCost: fare,
-          participants: p.party_members
-            ?.map((m: any) => ({
-              id: m.user_id,
-              name: m.user?.nickname || '멤버',
-              avatar: m.user?.avatar_url || '',
-              paid: m.status === 'paid',
-              memberStatus: m.status  // 'pending' | 'joined' | 'paid' | 'rejected'
-            })) || []
-        };
-      });
-      setAllPods(formatted);
+      setAllPods(data.map(formatPodData));
     } else if (error) {
       console.error('fetchPods error:', error);
       setFetchError(true);
@@ -300,11 +259,13 @@ export default function Home() {
       window.history.replaceState({}, '', '/');
     }
 
-    // 실시간 팟 업데이트 구독
+    // 실시간 팟 업데이트 구독 (debounce 적용 — 초당 다수 변경 시 과도한 호출 방지)
+    let realtimeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
     const realtimeChannel = supabase
       .channel('parties-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'parties' }, () => {
-        fetchPods(true); // 백그라운드 업데이트 — 로딩 스켈레톤 표시 안 함
+        if (realtimeDebounceTimer) clearTimeout(realtimeDebounceTimer);
+        realtimeDebounceTimer = setTimeout(() => fetchPods(true), 1000);
       })
       .subscribe();
 
@@ -347,6 +308,7 @@ export default function Home() {
     return () => {
       subscription.unsubscribe();
       supabase.removeChannel(realtimeChannel);
+      if (realtimeDebounceTimer) clearTimeout(realtimeDebounceTimer);
     };
   }, []);
 
@@ -431,11 +393,19 @@ export default function Home() {
     }
 
     // Add the host to party_members
-    await supabase.from('party_members').insert({
+    const { error: memberError } = await supabase.from('party_members').insert({
       party_id: newPod.id,
       user_id: user.id,
       status: 'joined'
     });
+
+    // 멤버 추가 실패 시 생성된 파티 삭제 (고아 파티 방지)
+    if (memberError) {
+      console.error('Error adding host to party_members:', memberError);
+      await supabase.from('parties').delete().eq('id', newPod.id).eq('host_id', user.id);
+      toast.error('팟 생성 중 오류가 발생했습니다. 다시 시도해주세요.');
+      return;
+    }
 
     fetchPods(); // reload
   };
@@ -713,6 +683,7 @@ export default function Home() {
           <PodDetail
             pod={selectedPod}
             onBack={() => setSelectedPodId(null)}
+            onLogin={handleKakaoLogin}
             onJoin={async () => {
               if (!user) { toast.error('로그인이 필요합니다.'); return; }
 
@@ -728,49 +699,32 @@ export default function Home() {
                 }
               }
 
-              // 자리 확인
-              const { data: party } = await supabase
-                .from('parties')
-                .select('current_member, max_member')
-                .eq('id', selectedPod.id)
-                .single();
-              if (!party || party.current_member >= party.max_member) {
-                toast.error('이미 자리가 다 찼습니다!');
-                return;
-              }
-
-              // 중복 참여 확인 (rejected는 재신청 허용)
-              const { data: existing } = await supabase
-                .from('party_members')
-                .select('user_id, status')
-                .eq('party_id', selectedPod.id)
-                .eq('user_id', user.id)
-                .maybeSingle();
-              if (existing && existing.status !== 'rejected') {
-                toast.info('이미 참여한 팟입니다.');
-                return;
-              }
-
               const isDepositPod = selectedPod.hasDeposit;
               const memberStatus = isDepositPod ? 'pending' : 'joined';
 
-              // DB 저장 (rejected → upsert로 재신청)
-              const { error: joinErr } = existing
-                ? await supabase.from('party_members')
-                    .update({ status: memberStatus })
-                    .eq('party_id', selectedPod.id)
-                    .eq('user_id', user.id)
-                : await supabase.from('party_members').insert({
-                    party_id: selectedPod.id,
-                    user_id: user.id,
-                    status: memberStatus
-                  });
+              // 서버 사이드 RPC로 원자적 참여 처리 (레이스 컨디션 방지)
+              const { data: joinResult, error: joinErr } = await supabase
+                .rpc('join_party', {
+                  p_party_id: selectedPod.id,
+                  p_user_id: user.id,
+                  p_member_status: memberStatus,
+                });
+
               if (joinErr) {
                 toast.error('참여 실패: ' + joinErr.message);
                 return;
               }
 
-              // current_member는 trg_sync_party_member_count 트리거가 자동 처리
+              if (joinResult?.error) {
+                const errMap: Record<string, string> = {
+                  'party_not_found': '존재하지 않는 팟입니다.',
+                  'party_not_active': '이미 종료된 팟입니다.',
+                  'full': '이미 자리가 다 찼습니다!',
+                  'already_joined': '이미 참여한 팟입니다.',
+                };
+                toast.error(errMap[joinResult.error] || '참여에 실패했습니다.');
+                return;
+              }
 
               // 성공 처리
               haptics.success();
@@ -816,6 +770,7 @@ export default function Home() {
             pod={directPod}
             onBack={() => { setDirectPod(null); fetchPods(); }}
             onJoin={() => { setDirectPod(null); fetchPods(); }}
+            onLogin={handleKakaoLogin}
             isHost={directPod.hostId === user?.id}
             user={user}
           />

@@ -71,9 +71,10 @@ interface PodDetailProps {
   onJoin?: () => void;
   isHost?: boolean;
   user?: any;
+  onLogin?: () => void;
 }
 
-export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDetailProps) {
+export function PodDetail({ pod, onBack, onJoin, isHost = false, user, onLogin }: PodDetailProps) {
   const approvedParticipants = pod.participants.filter(p => p.memberStatus !== 'pending' && p.memberStatus !== 'rejected');
   const emptySlots = pod.maxMembers - approvedParticipants.length;
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -433,8 +434,9 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
       toast.error(`팟 취소에 실패했습니다: ${error.message}`);
     } else {
       toast.success('팟이 취소되었습니다.');
-      // 모든 멤버에게 알림
-      approvedParticipants.forEach(p => {
+      // 승인된 멤버 + 대기 중 멤버 모두에게 알림
+      const allMembers = [...approvedParticipants, ...pendingMembers.map(m => ({ id: m.userId }))];
+      allMembers.forEach(p => {
         if (p.id === user.id) return;
         sendPush({
           userId: p.id,
@@ -799,7 +801,12 @@ export function PodDetail({ pod, onBack, onJoin, isHost = false, user }: PodDeta
                 </Button>
               </div>
             ) : (
-              <p className="text-center text-sm text-gray-400">로그인하면 댓글을 남길 수 있습니다</p>
+              <button
+                onClick={onLogin}
+                className="w-full text-center text-sm text-[#3182F6] font-semibold py-2 rounded-xl bg-blue-50 active:bg-blue-100 transition-colors"
+              >
+                로그인하고 댓글 남기기
+              </button>
             )}
           </div>
         )}
