@@ -55,7 +55,8 @@ export default function AdPage() {
 
         <div className="bg-blue-50 rounded-3xl p-6 text-center">
           <p className="text-sm text-gray-600 mb-1">자세한 상의는 메일을 이용해주세요</p>
-          <p className="text-xs text-gray-400 mb-3">광고 기간, 디자인 등 맞춤 상담 가능합니다</p>
+          <p className="text-xs text-gray-400 mb-1">광고 기간, 디자인 등 맞춤 상담 가능합니다</p>
+          <p className="text-xs text-green-600 font-semibold mb-3">어떠한 금액도 청구되지 않으니 안심하세요!</p>
           <a
             href="mailto:gocks77777@naver.com?subject=탈래말래 배너 광고 문의"
             className="inline-flex items-center gap-2 bg-[#3182F6] text-white font-bold px-6 py-3 rounded-2xl text-base active:scale-95 transition-transform"
