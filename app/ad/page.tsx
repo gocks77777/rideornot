@@ -24,7 +24,7 @@ export default function AdPage() {
             <span className="text-4xl">📢</span>
           </div>
           <h2 className="text-2xl font-bold text-[#191F28] mb-2">탈래말래? 배너 광고</h2>
-          <p className="text-gray-500">우리 학교 학생들에게 가게를 홍보하세요!</p>
+          <p className="text-gray-500">반경 5km 이내 사용자들에게 가게를 홍보하세요!</p>
         </div>
 
         <div className="bg-[#F2F4F6] rounded-3xl p-6 space-y-4">
@@ -54,7 +54,8 @@ export default function AdPage() {
         </div>
 
         <div className="bg-blue-50 rounded-3xl p-6 text-center">
-          <p className="text-sm text-gray-600 mb-3">문의 및 신청</p>
+          <p className="text-sm text-gray-600 mb-1">자세한 상의는 메일을 이용해주세요</p>
+          <p className="text-xs text-gray-400 mb-3">광고 기간, 디자인 등 맞춤 상담 가능합니다</p>
           <a
             href="mailto:gocks77777@naver.com?subject=탈래말래 배너 광고 문의"
             className="inline-flex items-center gap-2 bg-[#3182F6] text-white font-bold px-6 py-3 rounded-2xl text-base active:scale-95 transition-transform"
