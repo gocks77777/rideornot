@@ -99,9 +99,9 @@ function getClientIP(request: NextRequest): string {
 const CSP_HEADER = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://t1.daumcdn.net https://dapi.kakao.com https://developers.kakao.com https://kauth.kakao.com https://oapi.map.naver.com https://openapi.map.naver.com",
-  "style-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
   "img-src 'self' data: blob: https: http:",
-  "font-src 'self' data:",
+  "font-src 'self' data: https://cdn.jsdelivr.net",
   "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://dapi.kakao.com https://kauth.kakao.com https://naveropenapi.apigw.ntruss.com https://map.naver.com https://oapi.map.naver.com https://openapi.map.naver.com",
   "frame-src 'self' https://kauth.kakao.com",
   "worker-src 'self' blob:",
